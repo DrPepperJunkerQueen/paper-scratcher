@@ -2,10 +2,11 @@ import pygame
 from scenes.splash import SplashScreen
 from scenes.main_menu import MainMenu
 from scenes.game import GameScene
+import constants
 
 pygame.init()
-screen = pygame.display.set_mode((800, 600))
-pygame.display.set_caption("Paper.io")
+screen = pygame.display.set_mode((constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT))
+pygame.display.set_caption("Paper Scratcher")
 
 clock = pygame.time.Clock()
 
