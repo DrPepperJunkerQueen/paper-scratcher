@@ -1,4 +1,5 @@
 import pygame
+import constants
 
 class GameScene:
     def __init__(self, screen):
@@ -17,4 +18,4 @@ class GameScene:
     def draw(self):
         self.screen.fill((180, 255, 180))
         text = self.font.render("Tryb gry (tu będzie gameplay)", True, (0, 0, 0))
-        self.screen.blit(text, (200, 250))
+        self.screen.blit(text, (constants.SCREEN_WIDTH / 2, 250))

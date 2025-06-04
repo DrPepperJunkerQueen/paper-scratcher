@@ -31,7 +31,7 @@ class SplashScreen:
                 self.fade_in = False
                 self.timer = now  # resetuj timer
         else:
-            if elapsed > 1000:  # zacznij fade out po 1s
+            if elapsed > 2000:  # zacznij fade out po 1s
                 self.alpha -= 5
                 if self.alpha <= 0:
                     self.alpha = 0
