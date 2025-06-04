@@ -6,10 +6,16 @@ class SplashScreen:
         self.screen = screen
         self.next_scene = None
         self.logo = pygame.image.load(constants.SPLASH_IMAGE_PATH).convert_alpha()
-        self.logo = pygame.transform.scale(self.logo, (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT))  # opcjonalnie
+        self.logo = pygame.transform.scale(self.logo, (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT))
         self.alpha = 0
         self.fade_in = True
         self.timer = pygame.time.get_ticks()
+
+        # Wczytaj i odtwórz dźwięk
+        pygame.mixer.init()
+        self.sound = pygame.mixer.Sound(constants.SPLASH_SOUND_PATH)
+        self.sound.set_volume(0.05)
+        self.sound.play()
 
     def handle_event(self, event):
         pass  # Splash screen nie reaguje na kliknięcia
