@@ -133,6 +133,19 @@ class PaperBot:
             (x - margin, y + margin)
         ]
 
+    def calculate_polygon_area(self, points):
+        """Oblicz powierzchnię wielokąta"""
+        if len(points) < 3:
+            return 0
+
+        area = 0
+        n = len(points)
+        for i in range(n):
+            j = (i + 1) % n
+            area += points[i][0] * points[j][1] - points[j][0] * points[i][1]
+
+        return abs(area) / 2
+
     def die(self, reason):
         self.is_alive = False
         self.death_reason = reason
@@ -234,7 +247,7 @@ class PaperPlayer:
         self.trail_start_point = None
         self.is_alive = True
         self.death_reason = ""
-        self.bot = bot  # Dodaj referencję do bota
+        self.bot = bot
 
         margin = 40
         self.area = [
@@ -258,16 +271,11 @@ class PaperPlayer:
         min_y = 50 + self.size // 2
         max_y = constants.SCREEN_HEIGHT - 50 - self.size // 2
 
-        # Sprawdź kolizję z granicami
+        # Zatrzymaj się na granicy, niezależnie czy rysujesz czy nie
         if new_x < min_x or new_x > max_x or new_y < min_y or new_y > max_y:
-            if self.is_tracing:
-                self.die("Wyjście poza granice podczas rysowania")
-                return
-            else:
-                # Zatrzymaj się na granicy jeśli nie rysuje
-                self.x = max(min_x, min(max_x, new_x))
-                self.y = max(min_y, min(max_y, new_y))
-                return
+            self.x = max(min_x, min(max_x, new_x))
+            self.y = max(min_y, min(max_y, new_y))
+            return
 
         self.x = new_x
         self.y = new_y
@@ -567,17 +575,24 @@ class GameScene:
         self.big_font = pygame.font.SysFont("arial", 48)
         self.next_scene = None
         self.bot = PaperBot(100, 100)
+        self.bot2 = PaperBot(constants.SCREEN_WIDTH-100, constants.SCREEN_HEIGHT-100)
+        self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100)
         self.player = PaperPlayer(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2, bot=self.bot)
         self.speed = 2
         self.game_over_timer = 0
+        self.map_area = (constants.SCREEN_WIDTH - 100) * (constants.SCREEN_HEIGHT - 100)
+        self.win_ratio = 0.8
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 from scenes.main_menu import MainMenu
                 self.next_scene = MainMenu(self.screen)
-            elif event.key == pygame.K_r and (not self.player.is_alive or not self.bot.is_alive):
+            elif event.key == pygame.K_r and (
+                        not self.player.is_alive or not self.bot.is_alive or not self.bot2.is_alive or not self.bot3.is_alive):
                 self.bot = PaperBot(100, 100)
+                self.bot2 = PaperBot(constants.SCREEN_WIDTH - 100, constants.SCREEN_HEIGHT - 100)
+                self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100)
                 self.player = PaperPlayer(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2, bot=self.bot)
                 self.game_over_timer = 0
             elif self.player.is_alive:
@@ -592,21 +607,60 @@ class GameScene:
                     self.player.direction = (0, 1)
 
     def update(self):
-        if self.player.is_alive and self.bot.is_alive:
+        if self.player.is_alive and (self.bot.is_alive or self.bot2.is_alive or self.bot3.is_alive):
             self.player.move(self.speed)
-            self.bot.move(self.speed)
+            if self.bot.is_alive:
+                self.bot.move(self.speed)
+            if self.bot2.is_alive:
+                self.bot2.move(self.speed)
+            if self.bot3.is_alive:
+                self.bot3.move(self.speed)
 
-            # 1. Kolizja gracza ze śladem bota – BOT przegrywa
-            if self.check_trail_collision(self.player, self.bot):
-                self.bot.die("Kolizja ze śladem bota")
+            # Kolizje gracza z botami
+            if self.bot.is_alive and self.check_trail_collision(self.player, self.bot):
+                self.bot.die("Kolizja ze śladem bota 1")
                 self.player.area = convex_hull(self.player.area + self.bot.area)
-                # self.bot.area NIE czyść, żeby gracz mógł dalej przejmować ten obszar
+            if self.bot2.is_alive and self.check_trail_collision(self.player, self.bot2):
+                self.bot2.die("Kolizja ze śladem bota 2")
+                self.player.area = convex_hull(self.player.area + self.bot2.area)
+            if self.bot3.is_alive and self.check_trail_collision(self.player, self.bot3):
+                self.bot3.die("Kolizja ze śladem bota 3")
+                self.player.area = convex_hull(self.player.area + self.bot3.area)
 
-            # 2. Kolizja bota ze śladem gracza – GRACZ przegrywa
-            if self.check_trail_collision(self.bot, self.player):
-                self.player.die("Bot przejął twój ślad")
+            # Kolizje botów ze śladem gracza
+            if self.bot.is_alive and self.check_trail_collision(self.bot, self.player):
+                self.player.die("Bot 1 przejął twój ślad")
                 self.bot.area = convex_hull(self.bot.area + self.player.area)
                 self.player.area = []
+            if self.bot2.is_alive and self.check_trail_collision(self.bot2, self.player):
+                self.player.die("Bot 2 przejął twój ślad")
+                self.bot2.area = convex_hull(self.bot2.area + self.player.area)
+                self.player.area = []
+            if self.bot3.is_alive and self.check_trail_collision(self.bot3, self.player):
+                self.player.die("Bot 3 przejął twój ślad")
+                self.bot3.area = convex_hull(self.bot3.area + self.player.area)
+                self.player.area = []
+
+            # Warunek zwycięstwa
+            player_area = self.player.calculate_polygon_area(self.player.area)
+            bot_area = self.bot.calculate_polygon_area(self.bot.area) if self.bot.is_alive else 0
+            bot2_area = self.bot2.calculate_polygon_area(self.bot2.area) if self.bot2.is_alive else 0
+            bot3_area = self.bot3.calculate_polygon_area(self.bot3.area) if self.bot3.is_alive else 0
+
+            if player_area > self.map_area * self.win_ratio:
+                self.bot.is_alive = False
+                self.bot2.is_alive = False
+                self.bot3.is_alive = False
+                self.player.death_reason = "Zajęto >80% mapy"
+            elif bot_area > self.map_area * self.win_ratio:
+                self.player.is_alive = False
+                self.player.death_reason = "Bot 1 zajął >80% mapy"
+            elif bot2_area > self.map_area * self.win_ratio:
+                self.player.is_alive = False
+                self.player.death_reason = "Bot 2 zajął >80% mapy"
+            elif bot3_area > self.map_area * self.win_ratio:
+                self.player.is_alive = False
+                self.player.death_reason = "Bot 3 zajął >80% mapy"
         else:
             self.game_over_timer += 1
 
@@ -627,38 +681,47 @@ class GameScene:
         pygame.draw.rect(self.screen, (0, 0, 0), (50, 50, constants.SCREEN_WIDTH - 100, constants.SCREEN_HEIGHT - 100),
                          3)
 
-        # Rysuj oba obszary
+        # Rysuj obszary botów
         if len(self.bot.area) > 2:
             pygame.draw.polygon(self.screen, (255, 220, 180), self.bot.area)
             pygame.draw.polygon(self.screen, (200, 100, 0), self.bot.area, 2)
+        if len(self.bot2.area) > 2:
+            pygame.draw.polygon(self.screen, (220, 255, 180), self.bot2.area)
+            pygame.draw.polygon(self.screen, (100, 200, 0), self.bot2.area, 2)
+        if len(self.bot3.area) > 2:
+            pygame.draw.polygon(self.screen, (180, 255, 220), self.bot3.area)
+            pygame.draw.polygon(self.screen, (0, 200, 100), self.bot3.area, 2)
         if len(self.player.area) > 2:
             color = (200, 220, 255) if self.player.is_alive else (150, 150, 150)
             border = (0, 0, 200) if self.player.is_alive else (100, 100, 100)
             pygame.draw.polygon(self.screen, color, self.player.area)
             pygame.draw.polygon(self.screen, border, self.player.area, 2)
 
-        # Rysuj postacie nad odpowiednim obszarem
-        player_on_bot = len(self.bot.area) > 2 and point_in_polygon((self.player.x, self.player.y), self.bot.area)
-        player_on_player = len(self.player.area) > 2 and point_in_polygon((self.player.x, self.player.y),
-                                                                          self.player.area)
-        bot_on_player = len(self.player.area) > 2 and point_in_polygon((self.bot.x, self.bot.y), self.player.area)
-        bot_on_bot = len(self.bot.area) > 2 and point_in_polygon((self.bot.x, self.bot.y), self.bot.area)
 
-        # Najpierw rysuj bota, jeśli jest na obszarze gracza
-        if bot_on_player:
-            self.player.draw(self.screen)
-            self.bot.draw(self.screen)
-        # Potem gracza, jeśli jest na obszarze bota
-        elif player_on_bot:
-            self.bot.draw(self.screen)
-            self.player.draw(self.screen)
-        # Jeśli obaj są na swoich obszarach, rysuj domyślnie
-        else:
-            self.bot.draw(self.screen)
-            self.player.draw(self.screen)
+        # Rysuj postacie
+        self.bot.draw(self.screen)
+        self.bot2.draw(self.screen)
+        self.bot3.draw(self.screen)
+        self.player.draw(self.screen)
+
+        font = pygame.font.SysFont("arial", 22)
+        entities = [
+            (self.player, (0, 0, 200)),
+            (self.bot, (200, 100, 0)),
+            (self.bot2, (100, 200, 0)),
+            (self.bot3, (0, 200, 100)),
+        ]
+        for entity, color in entities:
+            if len(entity.area) > 2:
+                area = entity.calculate_polygon_area(entity.area)
+                percent = int(100 * area / self.map_area)
+                centroid = entity.calculate_centroid(entity.area)
+                text = font.render(f"{percent}%", True, color)
+                text_rect = text.get_rect(center=(int(centroid[0]), int(centroid[1])))
+                self.screen.blit(text, text_rect)
 
         self.draw_ui()
-        if not self.player.is_alive or not self.bot.is_alive:
+        if not self.player.is_alive or (not self.bot.is_alive and not self.bot2.is_alive and not self.bot3.is_alive):
             self.draw_game_over()
 
     def draw_ui(self):
@@ -670,11 +733,11 @@ class GameScene:
 
         # Pokaż status
         if self.player.is_tracing:
-            status_text = self.font.render("RYSOWANIE - Uważaj na swój ślad!", True, (255, 0, 0))
-            self.screen.blit(status_text, (10, 35))
+            status_text = self.font.render("Rysowanie", True, (255, 0, 0))
+            self.screen.blit(status_text, (300, 10))
         else:
             status_text = self.font.render("W bezpiecznym obszarze", True, (0, 150, 0))
-            self.screen.blit(status_text, (10, 35))
+            self.screen.blit(status_text, (300, 10))
 
         # Instrukcje
         instruction_text = self.font.render("Strzałki: sterowanie | ESC: menu | R: restart (po śmierci)", True,
