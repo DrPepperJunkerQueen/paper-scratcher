@@ -13,7 +13,7 @@ class MainMenu:
         button_labels = ["Start", "Skins", "Profile", "Settings"]
         button_width = 200
         button_height = 60
-        spacing = 20  # odstęp pionowy między przyciskami
+        spacing = 20
         total_height = len(button_labels) * (button_height + spacing) - spacing
         start_y = (constants.SCREEN_HEIGHT - total_height) / 2 + 100
 
@@ -27,8 +27,16 @@ class MainMenu:
         if event.type == pygame.MOUSEBUTTONDOWN:
             for label, rect in self.buttons:
                 if rect.collidepoint(event.pos):
-                    from scenes.game import GameScene
-                    self.next_scene = GameScene(self.screen)
+                    if label == "Start":
+                        from scenes.game import GameScene
+                        self.next_scene = GameScene(self.screen)
+                    elif label == "Skins":
+                        from scenes.skin_selection import SkinSelectionScene
+                        self.next_scene = SkinSelectionScene(self.screen)
+                    else:
+                        # Domyślnie do gry – możesz to zmienić na sceny Profilu i Ustawień
+                        from scenes.game import GameScene
+                        self.next_scene = GameScene(self.screen)
 
     def update(self):
         pass
