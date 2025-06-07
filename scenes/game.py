@@ -239,7 +239,7 @@ class PaperPlayer:
     def __init__(self, x, y, color=(0, 0, 255), bot=None):
         self.x = x
         self.y = y
-        self.size = 15
+        self.size = constants.SKIN_SIZE
         self.color = color
         self.direction = (1, 0)
         self.trail = []
@@ -248,6 +248,10 @@ class PaperPlayer:
         self.is_alive = True
         self.death_reason = ""
         self.bot = bot
+        
+        # Wczytaj wybrany skin
+        self.skin_image = None
+        self.load_skin()
 
         margin = 40
         self.area = [
@@ -256,6 +260,17 @@ class PaperPlayer:
             (x + margin, y + margin),
             (x - margin, y + margin)
         ]
+
+    def load_skin(self):
+        """Wczytaj wybrany skin"""
+        try:
+            if constants.SELECTED_SKIN_INDEX < len(constants.SKIN_IMAGE_PATHS):
+                skin_path = constants.SKIN_IMAGE_PATHS[constants.SELECTED_SKIN_INDEX]
+                self.skin_image = pygame.image.load(skin_path).convert_alpha()
+                self.skin_image = pygame.transform.smoothscale(self.skin_image, (self.size, self.size))
+        except (pygame.error, IndexError):
+            # Jeśli nie udało się wczytać skina, używaj domyślnego koloru
+            self.skin_image = None
 
     def move(self, speed):
         if not self.is_alive:
@@ -338,6 +353,9 @@ class PaperPlayer:
         self.is_tracing = False
         self.trail_start_point = None
         self.direction = (1, 0)
+        
+        # Przeładuj skin (na wypadek gdyby się zmienił)
+        self.load_skin()
 
         # Resetuj obszar
         margin = 40
@@ -559,13 +577,19 @@ class PaperPlayer:
                 # Jeśli gracz nie żyje, rysuj ślad w ciemniejszym kolorze
                 pygame.draw.lines(screen, (150, 0, 0), False, self.trail, 3)
 
-        # Rysuj gracza
-        player_color = self.color if self.is_alive else (100, 100, 100)
-        pygame.draw.rect(
-            screen,
-            player_color,
-            (self.x - self.size // 2, self.y - self.size // 2, self.size, self.size)
-        )
+        # Rysuj gracza - użyj skina jeśli dostępny, w przeciwnym razie użyj kwadratu
+        if self.skin_image and self.is_alive:
+            # Wycentruj skin
+            skin_rect = self.skin_image.get_rect(center=(self.x, self.y))
+            screen.blit(self.skin_image, skin_rect)
+        else:
+            # Domyślny kwadrat (gdy nie ma skina lub gracz nie żyje)
+            player_color = self.color if self.is_alive else (100, 100, 100)
+            pygame.draw.rect(
+                screen,
+                player_color,
+                (self.x - self.size // 2, self.y - self.size // 2, self.size, self.size)
+            )
 
 
 class GameScene:
@@ -577,6 +601,7 @@ class GameScene:
         self.bot = PaperBot(100, 100)
         self.bot2 = PaperBot(constants.SCREEN_WIDTH-100, constants.SCREEN_HEIGHT-100)
         self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100)
+        # Gracz będzie teraz używał wybranego skina
         self.player = PaperPlayer(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2, bot=self.bot)
         self.speed = 2
         self.game_over_timer = 0
@@ -590,6 +615,7 @@ class GameScene:
                 self.next_scene = MainMenu(self.screen)
             elif event.key == pygame.K_r and (
                         not self.player.is_alive or not self.bot.is_alive or not self.bot2.is_alive or not self.bot3.is_alive):
+                # Resetuj gra z zachowaniem wybranego skina
                 self.bot = PaperBot(100, 100)
                 self.bot2 = PaperBot(constants.SCREEN_WIDTH - 100, constants.SCREEN_HEIGHT - 100)
                 self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100)

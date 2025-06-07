@@ -10,3 +10,5 @@ SKIN_IMAGE_PATHS = [
     "resources/skins/skin2.png",
     "resources/skins/skin3.png",
 ]
+SELECTED_SKIN_INDEX = 0  # Indeks wybranego skina
+SKIN_SIZE = 15  # Rozmiar skina na planszy
