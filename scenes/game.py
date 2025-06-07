@@ -239,7 +239,8 @@ class PaperPlayer:
     def __init__(self, x, y, color=(0, 0, 255), bot=None):
         self.x = x
         self.y = y
-        self.size = constants.SKIN_SIZE
+        self.size = constants.SKIN_SIZE  # Rozmiar używany do kolizji i mechaniki gry
+        self.visual_size = constants.SKIN_SIZE * 2.5  # Rozmiar wizualny (możesz zmienić mnożnik)
         self.color = color
         self.direction = (1, 0)
         self.trail = []
@@ -267,7 +268,8 @@ class PaperPlayer:
             if constants.SELECTED_SKIN_INDEX < len(constants.SKIN_IMAGE_PATHS):
                 skin_path = constants.SKIN_IMAGE_PATHS[constants.SELECTED_SKIN_INDEX]
                 self.skin_image = pygame.image.load(skin_path).convert_alpha()
-                self.skin_image = pygame.transform.smoothscale(self.skin_image, (self.size, self.size))
+                # Używamy visual_size zamiast size do skalowania skina
+                self.skin_image = pygame.transform.smoothscale(self.skin_image, (int(self.visual_size), int(self.visual_size)))
         except (pygame.error, IndexError):
             # Jeśli nie udało się wczytać skina, używaj domyślnego koloru
             self.skin_image = None
@@ -280,7 +282,7 @@ class PaperPlayer:
         new_x = self.x + dx * speed
         new_y = self.y + dy * speed
 
-        # Granice planszy
+        # Granice planszy - nadal używamy self.size do kolizji z granicami
         min_x = 50 + self.size // 2
         max_x = constants.SCREEN_WIDTH - 50 - self.size // 2
         min_y = 50 + self.size // 2
@@ -296,7 +298,7 @@ class PaperPlayer:
         self.y = new_y
         current_pos = (self.x, self.y)
 
-        # Sprawdź kolizję ze śladem (tylko jeśli rysuje)
+        # Sprawdź kolizję ze śladem (tylko jeśli rysuje) - nadal używamy self.size
         if self.is_tracing and self.check_trail_collision(current_pos):
             self.die("Kolizja z własnym śladem")
             return
@@ -320,7 +322,7 @@ class PaperPlayer:
                 self.trail.append(current_pos)
 
     def check_trail_collision(self, current_pos):
-        """Sprawdź kolizję z własnym śladem"""
+        """Sprawdź kolizję z własnym śladem - używa self.size do kolizji"""
         if len(self.trail) < 10:  # Potrzebujemy więcej punktów przed sprawdzeniem kolizji
             return False
 
@@ -330,7 +332,7 @@ class PaperPlayer:
                 p1 = self.trail[i]
                 p2 = self.trail[i + 1]
 
-                # Sprawdź czy aktualny punkt jest blisko odcinka śladu
+                # Sprawdź czy aktualny punkt jest blisko odcinka śladu - używamy self.size
                 dist = distance_point_to_segment(current_pos, p1, p2)
                 if dist < self.size // 2 + 3:  # Kolizja z małą tolerancją
                     return True
@@ -577,18 +579,19 @@ class PaperPlayer:
                 # Jeśli gracz nie żyje, rysuj ślad w ciemniejszym kolorze
                 pygame.draw.lines(screen, (150, 0, 0), False, self.trail, 3)
 
-        # Rysuj gracza - użyj skina jeśli dostępny, w przeciwnym razie użyj kwadratu
+        # Rysuj gracza - użyj visual_size dla wyświetlania
         if self.skin_image and self.is_alive:
-            # Wycentruj skin
+            # Wycentruj skin - skin już ma odpowiedni rozmiar dzięki load_skin()
             skin_rect = self.skin_image.get_rect(center=(self.x, self.y))
             screen.blit(self.skin_image, skin_rect)
         else:
-            # Domyślny kwadrat (gdy nie ma skina lub gracz nie żyje)
+            # Domyślny kwadrat (gdy nie ma skina lub gracz nie żyje) - używamy visual_size
             player_color = self.color if self.is_alive else (100, 100, 100)
             pygame.draw.rect(
                 screen,
                 player_color,
-                (self.x - self.size // 2, self.y - self.size // 2, self.size, self.size)
+                (self.x - self.visual_size // 2, self.y - self.visual_size // 2, 
+                 int(self.visual_size), int(self.visual_size))
             )
 
 

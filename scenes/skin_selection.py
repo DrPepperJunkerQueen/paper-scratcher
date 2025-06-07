@@ -30,9 +30,9 @@ class SkinSelectionScene:
         self.left_button = pygame.Rect(40, (constants.SCREEN_HEIGHT - 60) // 2, 60, 60)
         self.right_button = pygame.Rect(constants.SCREEN_WIDTH - 100, (constants.SCREEN_HEIGHT - 60) // 2, 60, 60)
 
-        # Przyciski dolne
-        self.button_select = pygame.Rect((constants.SCREEN_WIDTH - 200) // 2, 580, 200, 60)
-        self.button_back = pygame.Rect((constants.SCREEN_WIDTH - 200) // 2, 660, 200, 60)
+        # Przyciski dolne - przesunięte niżej
+        self.button_select = pygame.Rect((constants.SCREEN_WIDTH - 200) // 2, 650, 200, 60)
+        self.button_back = pygame.Rect((constants.SCREEN_WIDTH - 200) // 2, 730, 200, 60)
         
         # Status message
         self.status_message = ""
@@ -70,14 +70,14 @@ class SkinSelectionScene:
             skin_rect = current_skin.get_rect(center=(constants.SCREEN_WIDTH / 2, constants.SCREEN_HEIGHT / 2))
             self.screen.blit(current_skin, skin_rect)
 
-        # Informacja o aktualnie wybranym skinie
+        # Informacja o aktualnie wybranym skinie - przesunięta niżej
         current_info = self.small_font.render(f"Skin {self.current_index + 1} of {len(self.skins)}", True, (255, 255, 255))
-        self.screen.blit(current_info, ((constants.SCREEN_WIDTH - current_info.get_width()) / 2, 460))
+        self.screen.blit(current_info, ((constants.SCREEN_WIDTH - current_info.get_width()) / 2, 540))
 
-        # Pokazuj który skin jest obecnie aktywny
+        # Pokazuj który skin jest obecnie aktywny - przesunięte niżej
         if self.current_index == constants.SELECTED_SKIN_INDEX:
             active_text = self.small_font.render("(Currently Active)", True, (0, 255, 0))
-            self.screen.blit(active_text, ((constants.SCREEN_WIDTH - active_text.get_width()) / 2, 485))
+            self.screen.blit(active_text, ((constants.SCREEN_WIDTH - active_text.get_width()) / 2, 570))
 
         # Przyciski tekstowe
         button_color = (0, 255, 0)
@@ -102,7 +102,7 @@ class SkinSelectionScene:
             (self.right_button.right, self.right_button.centery)
         ])
 
-        # Status message
+        # Status message - przesunięte niżej
         if self.status_timer > 0:
             status_text = self.small_font.render(self.status_message, True, (0, 255, 0))
-            self.screen.blit(status_text, ((constants.SCREEN_WIDTH - status_text.get_width()) / 2, 520))
+            self.screen.blit(status_text, ((constants.SCREEN_WIDTH - status_text.get_width()) / 2, 600))
