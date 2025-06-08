@@ -4,6 +4,7 @@ import math
 import random
 import scenes.game
 
+
 class PaperPlayer:
     def __init__(self, x, y, color=(0, 0, 255), bot=None):
         self.x = x
@@ -18,7 +19,9 @@ class PaperPlayer:
         self.is_alive = True
         self.death_reason = ""
         self.bot = bot
-        
+        self.just_finished_drawing = False  # NOWA FLAGA do sprawdzania przejęć
+        self.other_bots = []  # NOWE: Lista wszystkich botów
+
         # Wczytaj wybrany skin
         self.skin_image = None
         self.load_skin()
@@ -38,7 +41,8 @@ class PaperPlayer:
                 skin_path = constants.SKIN_IMAGE_PATHS[constants.SELECTED_SKIN_INDEX]
                 self.skin_image = pygame.image.load(skin_path).convert_alpha()
                 # Używamy visual_size zamiast size do skalowania skina
-                self.skin_image = pygame.transform.smoothscale(self.skin_image, (int(self.visual_size), int(self.visual_size)))
+                self.skin_image = pygame.transform.smoothscale(self.skin_image,
+                                                               (int(self.visual_size), int(self.visual_size)))
         except (pygame.error, IndexError):
             # Jeśli nie udało się wczytać skina, używaj domyślnego koloru
             self.skin_image = None
@@ -77,10 +81,12 @@ class PaperPlayer:
             if self.is_tracing and len(self.trail) > 3:
                 # Zamknij pętlę i powiększ obszar
                 self.update_area()
+                self.just_finished_drawing = True  # USTAW FLAGĘ
             self.is_tracing = False
             self.trail = []
             self.trail_start_point = None
         else:
+            self.just_finished_drawing = False  # RESETUJ FLAGĘ gdy rysuje
             if not self.is_tracing:
                 self.is_tracing = True
                 self.trail = []
@@ -112,6 +118,7 @@ class PaperPlayer:
         """Zabij gracza"""
         self.is_alive = False
         self.death_reason = reason
+        self.just_finished_drawing = False  # Resetuj flagę
         print(f"Gracz zmarł: {reason}")
 
     def reset(self):
@@ -124,7 +131,8 @@ class PaperPlayer:
         self.is_tracing = False
         self.trail_start_point = None
         self.direction = (1, 0)
-        
+        self.just_finished_drawing = False  # Resetuj flagę
+
         # Przeładuj skin (na wypadek gdyby się zmienił)
         self.load_skin()
 
@@ -146,48 +154,31 @@ class PaperPlayer:
 
         new_area = self.create_simple_expansion()
         if new_area and len(new_area) >= 3:
-            bot = self.bot
-            if bot:
+            # Przejmij obszary od wszystkich botów
+            for bot in self.other_bots:
+                if not bot.is_alive:
+                    continue
+
                 taken_points = [p for p in bot.area if scenes.game.point_in_polygon(p, new_area)]
                 if taken_points:
-                    bot.area = [p for p in bot.area if p not in taken_points]
+                    # Usuń przejęte punkty z obszaru bota
+                    bot.area = [p for p in bot.area if not scenes.game.point_in_polygon(p, new_area)]
+
+                    # Dodaj przejęte punkty do nowego obszaru
                     new_area += taken_points
-                    bot.area = scenes.game.convex_hull(bot.area)
-                    new_area = scenes.game.convex_hull(new_area)
+
+                    # Przebuduj obszar bota
+                    if len(bot.area) >= 3:
+                        bot.area = scenes.game.smart_hull(bot.area)
+                    else:
+                        bot.area = []
+
+                    # Przebuduj nasz obszar z przejętymi punktami
+                    new_area = scenes.game.smart_hull(new_area)
+
+                    print(f"Gracz przejął {len(taken_points)} punktów od bota!")
+
             self.area = new_area
-
-    def create_area_with_intersections(self):
-        """Stwórz obszar znajdując przecięcia śladu z obecnym obszarem"""
-        if not self.trail_start_point:
-            return None
-
-        # Znajdź punkty wejścia i wyjścia ze śladu
-        entry_point = self.trail_start_point
-        exit_point = (self.x, self.y)
-
-        # Znajdź najbliższe punkty na brzegu obszaru
-        entry_edge_idx = self.find_closest_edge(entry_point)
-        exit_edge_idx = self.find_closest_edge(exit_point)
-
-        if entry_edge_idx == -1 or exit_edge_idx == -1:
-            return None
-
-        # Stwórz nowy obszar
-        new_area = []
-
-        # Dodaj część starego obszaru (od exit do entry)
-        current_idx = exit_edge_idx
-        while current_idx != entry_edge_idx:
-            new_area.append(self.area[current_idx])
-            current_idx = (current_idx + 1) % len(self.area)
-
-        # Dodaj punkt entry
-        new_area.append(self.area[entry_edge_idx])
-
-        # Dodaj ślad
-        new_area.extend(self.trail)
-
-        return self.clean_area(new_area)
 
     def create_simple_expansion(self):
         """Prosta ekspansja - dodaj ślad do istniejącego obszaru"""
@@ -200,49 +191,12 @@ class PaperPlayer:
         # Dodaj punkty śladu
         all_points.extend(self.trail)
 
-        # Znajdź otoczkę wypukłą
+        # Użyj smart_hull zamiast convex_hull
         if len(all_points) >= 3:
-            hull = scenes.game.convex_hull(all_points)
+            hull = scenes.game.smart_hull(all_points)
             return self.clean_area(hull)
 
         return None
-
-    def find_closest_edge(self, point):
-        """Znajdź indeks najbliższej krawędzi obszaru"""
-        min_dist = float('inf')
-        closest_idx = -1
-
-        for i in range(len(self.area)):
-            p1 = self.area[i]
-            p2 = self.area[(i + 1) % len(self.area)]
-
-            dist = scenes.game.distance_point_to_segment(point, p1, p2)
-            if dist < min_dist:
-                min_dist = dist
-                closest_idx = i
-
-        return closest_idx
-
-    def find_closest_point_on_area(self, point):
-        """Znajdź najbliższy punkt na brzegu obszaru"""
-        min_dist = float('inf')
-        closest_point = None
-        closest_edge_idx = -1
-
-        for i in range(len(self.area)):
-            p1 = self.area[i]
-            p2 = self.area[(i + 1) % len(self.area)]
-
-            # Znajdź najbliższy punkt na tym odcinku
-            closest_on_segment = self.closest_point_on_segment(point, p1, p2)
-            dist = self.distance(point, closest_on_segment)
-
-            if dist < min_dist:
-                min_dist = dist
-                closest_point = closest_on_segment
-                closest_edge_idx = i
-
-        return closest_point, closest_edge_idx
 
     def clean_area(self, points):
         """Wyczyść obszar z duplikatów i niepotrzebnych punktów"""
@@ -265,32 +219,6 @@ class PaperPlayer:
 
         return cleaned
 
-    def closest_point_on_segment(self, point, seg_start, seg_end):
-        """Znajdź najbliższy punkt na odcinku"""
-        px, py = point
-        x1, y1 = seg_start
-        x2, y2 = seg_end
-
-        A = px - x1
-        B = py - y1
-        C = x2 - x1
-        D = y2 - y1
-
-        dot = A * C + B * D
-        len_sq = C * C + D * D
-
-        if len_sq == 0:
-            return seg_start
-
-        param = dot / len_sq
-
-        if param < 0:
-            return seg_start
-        elif param > 1:
-            return seg_end
-        else:
-            return (x1 + param * C, y1 + param * D)
-
     def calculate_polygon_area(self, points):
         """Oblicz powierzchnię wielokąta"""
         if len(points) < 3:
@@ -312,22 +240,6 @@ class PaperPlayer:
         x = sum(p[0] for p in points) / len(points)
         y = sum(p[1] for p in points) / len(points)
         return (x, y)
-
-    def remove_duplicate_points(self, points, tolerance=3):
-        """Usuń punkty, które są bardzo blisko siebie"""
-        if len(points) < 2:
-            return points
-
-        cleaned = [points[0]]
-        for i in range(1, len(points)):
-            if self.distance(points[i], cleaned[-1]) > tolerance:
-                cleaned.append(points[i])
-
-        # Sprawdź czy pierwszy i ostatni punkt nie są za blisko
-        if len(cleaned) > 2 and self.distance(cleaned[0], cleaned[-1]) <= tolerance:
-            cleaned.pop()
-
-        return cleaned
 
     def draw(self, screen):
         # Rysuj obszar
@@ -359,6 +271,6 @@ class PaperPlayer:
             pygame.draw.rect(
                 screen,
                 player_color,
-                (self.x - self.visual_size // 2, self.y - self.visual_size // 2, 
+                (self.x - self.visual_size // 2, self.y - self.visual_size // 2,
                  int(self.visual_size), int(self.visual_size))
             )

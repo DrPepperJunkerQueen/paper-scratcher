@@ -33,8 +33,11 @@ class MainMenu:
                     elif label == "Skins":
                         from scenes.skin_selection import SkinSelectionScene
                         self.next_scene = SkinSelectionScene(self.screen)
+                    elif label == "Settings":
+                        from scenes.settings import SettingsScene
+                        self.next_scene = SettingsScene(self.screen)
                     else:
-                        # Domyślnie do gry – możesz to zmienić na sceny Profilu i Ustawień
+                        # Domyślnie do gry – możesz to zmienić na sceny Profilu
                         from scenes.game import GameScene
                         self.next_scene = GameScene(self.screen)
 
