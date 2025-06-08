@@ -31,6 +31,7 @@ class PaperPlayer:
         self.base_speed_multiplier = 1.0
         self.speed_boost_multiplier = 2.0
         self.speed_boost_duration = 300
+        self.powerup_sound = None
 
         self.skin_image = None
         self.load_skin()
@@ -46,11 +47,11 @@ class PaperPlayer:
     def apply_speed_powerup(self):
         self.speed_boost_timer = self.speed_boost_duration
         try:
-            powerup_sound = pygame.mixer.Sound(constants.POWERUP_SOUND_PATH)
-            powerup_sound.set_volume(0.3)
-            powerup_sound.play()
+            self.powerup_sound = pygame.mixer.Sound("resources/MyLifebelikememe.mp3")
+            self.powerup_sound.set_volume(0.05)
+            self.powerup_sound.play()
         except pygame.error:
-            pass
+            self.powerup_sound = None
 
     def get_current_speed_multiplier(self):
         if self.speed_boost_timer > 0:
@@ -60,6 +61,10 @@ class PaperPlayer:
     def update_powerup_timers(self):
         if self.speed_boost_timer > 0:
             self.speed_boost_timer -= 1
+            if self.speed_boost_timer == 0:
+                if self.powerup_sound:
+                    self.powerup_sound.stop()
+                    self.powerup_sound = None
 
     def update_captured_points_timer(self):
         if self.captured_points_timer > 0:
@@ -104,7 +109,7 @@ class PaperPlayer:
         current_pos = (self.x, self.y)
 
         if self.is_tracing and self.check_trail_collision(current_pos):
-            self.die("Kolizja z własnym śladem")
+            self.die("Collision with own trail")
             return
 
         if scenes.game.point_in_polygon(current_pos, self.area):
@@ -145,6 +150,18 @@ class PaperPlayer:
         self.death_reason = reason
         self.just_finished_drawing = False
         self.speed_boost_timer = 0
+        if self.powerup_sound:
+            self.powerup_sound.stop()
+            self.powerup_sound = None
+
+        # Zatrzymaj wszystkie dźwięki i odtwórz dźwięk porażki
+        pygame.mixer.stop()
+        try:
+            defeat_sound = pygame.mixer.Sound("resources/defeat.mp3")
+            defeat_sound.set_volume(0.05)
+            defeat_sound.play()
+        except pygame.error:
+            pass
 
     def reset(self):
         self.x = constants.SCREEN_WIDTH // 2
@@ -156,9 +173,8 @@ class PaperPlayer:
         self.trail_start_point = None
         self.direction = (1, 0)
         self.just_finished_drawing = False
-
         self.speed_boost_timer = 0
-
+        self.powerup_sound = None
         self.load_skin()
 
         margin = 40
@@ -259,22 +275,6 @@ class PaperPlayer:
         return (x, y)
 
     def draw(self, screen):
-        if len(self.area) > 2:
-            if self.is_alive:
-                if self.speed_boost_timer > 0:
-                    pulse = int(abs(math.sin(self.speed_boost_timer * 0.3)) * 50)
-                    area_color = (min(255, 200 + pulse // 2), min(255, 220 + pulse // 2), 255)
-                    border_color = (min(255, 0 + pulse), min(255, 0 + pulse), min(255, 200 + pulse))
-                else:
-                    area_color = (200, 220, 255)
-                    border_color = (0, 0, 200)
-
-                pygame.draw.polygon(screen, area_color, self.area)
-                pygame.draw.polygon(screen, border_color, self.area, 2)
-            else:
-                pygame.draw.polygon(screen, (150, 150, 150), self.area)
-                pygame.draw.polygon(screen, (100, 100, 100), self.area, 2)
-
         if constants.USE_TRIANGULATION and self.triangles:
             for triangle in self.triangles:
                 triangle_color = (0, 0, 150) if self.is_alive else (80, 80, 80)

@@ -2,7 +2,6 @@ import pygame
 import constants
 import math
 import random
-import scenes.game
 
 
 class PaperBot:
@@ -37,6 +36,8 @@ class PaperBot:
         self.powerup_search_range = 100
         self.powerup_chase_time = 0
 
+        self.game_functions = None
+
         margin = 40
         self.area = [
             (x - margin, y - margin),
@@ -44,6 +45,9 @@ class PaperBot:
             (x + margin, y + margin),
             (x - margin, y + margin)
         ]
+
+    def set_game_functions(self, functions):
+        self.game_functions = functions
 
     def apply_speed_powerup(self):
         self.speed_boost_timer = self.speed_boost_duration
@@ -86,7 +90,7 @@ class PaperBot:
             return False
 
         current_pos = (self.x, self.y)
-        if not scenes.game.point_in_polygon(current_pos, self.area):
+        if not self.point_in_polygon(current_pos, self.area):
             return False
 
         area_size = self.calculate_polygon_area(self.area)
@@ -95,6 +99,25 @@ class PaperBot:
             return False
 
         return True
+
+    def point_in_polygon(self, point, polygon):
+        x, y = point
+        n = len(polygon)
+        inside = False
+
+        p1x, p1y = polygon[0]
+        for i in range(1, n + 1):
+            p2x, p2y = polygon[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+
+        return inside
 
     def calculate_polygon_area(self, points):
         if len(points) < 3:
@@ -114,6 +137,10 @@ class PaperBot:
         self.just_finished_drawing = False
         self.speed_boost_timer = 0
         self.target_powerup = None
+        self.area = []
+        self.trail = []
+        self.captured_points = []
+        self.triangles = []
 
     def move(self, speed, powerups=None):
         self.update_powerup_timers()
@@ -182,7 +209,7 @@ class PaperBot:
         self.y = new_y
         current_pos = (self.x, self.y)
 
-        if scenes.game.point_in_polygon(current_pos, self.area):
+        if self.point_in_polygon(current_pos, self.area):
             if self.is_tracing and len(self.trail) > 3:
                 self.update_area()
                 self.just_finished_drawing = True
@@ -224,28 +251,30 @@ class PaperBot:
                 if not other_player.is_alive:
                     continue
 
-                taken_points = [p for p in other_player.area if scenes.game.point_in_polygon(p, new_area)]
+                taken_points = [p for p in other_player.area if self.point_in_polygon(p, new_area)]
                 if taken_points:
                     all_captured_points.extend(taken_points)
 
-                    other_player.area = [p for p in other_player.area if not scenes.game.point_in_polygon(p, new_area)]
+                    other_player.area = [p for p in other_player.area if not self.point_in_polygon(p, new_area)]
 
                     new_area += taken_points
 
                     if len(other_player.area) >= 3:
-                        hull_result = scenes.game.smart_hull(other_player.area)
-                        if isinstance(hull_result, tuple):
-                            other_player.area = hull_result[0]
-                        else:
-                            other_player.area = hull_result
+                        if self.game_functions:
+                            hull_result = self.game_functions['smart_hull'](other_player.area)
+                            if isinstance(hull_result, tuple):
+                                other_player.area = hull_result[0]
+                            else:
+                                other_player.area = hull_result
                     else:
                         other_player.area = []
 
-                    hull_result = scenes.game.smart_hull(new_area)
-                    if isinstance(hull_result, tuple):
-                        new_area = hull_result[0]
-                    else:
-                        new_area = hull_result
+                    if self.game_functions:
+                        hull_result = self.game_functions['smart_hull'](new_area)
+                        if isinstance(hull_result, tuple):
+                            new_area = hull_result[0]
+                        else:
+                            new_area = hull_result
 
             if all_captured_points:
                 self.captured_points = all_captured_points
@@ -254,18 +283,24 @@ class PaperBot:
             self.area = new_area
 
     def create_area_expansion(self):
-        smoothed_trail = scenes.game.smooth_trail(self.trail)
-
-        interpolated_trail = scenes.game.interpolate_points(smoothed_trail, density=8)
+        if self.game_functions:
+            smoothed_trail = self.game_functions['smooth_trail'](self.trail)
+            interpolated_trail = self.game_functions['interpolate_points'](smoothed_trail, density=8)
+        else:
+            smoothed_trail = self.trail
+            interpolated_trail = self.trail
 
         all_points = []
         all_points.extend(self.area)
         all_points.extend(interpolated_trail)
 
         if len(all_points) >= 3:
-            hull, triangles = scenes.game.smart_hull(all_points)
-            self.triangles = triangles
-            return self.clean_area(hull)
+            if self.game_functions:
+                hull, triangles = self.game_functions['smart_hull'](all_points)
+                self.triangles = triangles
+                return self.clean_area(hull)
+            else:
+                return self.clean_area(all_points)
 
         return None
 
@@ -290,34 +325,10 @@ class PaperBot:
         return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
     def draw(self, screen):
-        if len(self.area) > 2:
-            if self.speed_boost_timer > 0:
-                pulse = int(abs(math.sin(self.speed_boost_timer * 0.3)) * 30)
-                light_color = (
-                    min(255, self.color[0] + 100 + pulse),
-                    min(255, self.color[1] + 100 + pulse),
-                    min(255, self.color[2] + 100 + pulse)
-                )
-                dark_color = (
-                    min(255, max(0, self.color[0] - 50 + pulse)),
-                    min(255, max(0, self.color[1] - 50 + pulse)),
-                    min(255, max(0, self.color[2] - 50 + pulse))
-                )
-            else:
-                light_color = (
-                    min(255, self.color[0] + 100),
-                    min(255, self.color[1] + 100),
-                    min(255, self.color[2] + 100)
-                )
-                dark_color = (
-                    max(0, self.color[0] - 50),
-                    max(0, self.color[1] - 50),
-                    max(0, self.color[2] - 50)
-                )
+        if not self.is_alive:
+            return
 
-            pygame.draw.polygon(screen, light_color, self.area)
-            pygame.draw.polygon(screen, dark_color, self.area, 2)
-
+        # Rysuj tylko trójkąty triangulacji (jeśli włączone)
         if constants.USE_TRIANGULATION and self.triangles:
             for triangle in self.triangles:
                 triangle_color = (
@@ -331,14 +342,19 @@ class PaperBot:
                 for point in triangle:
                     pygame.draw.circle(screen, triangle_color, (int(point[0]), int(point[1])), 3)
 
+        # Rysuj przejęte punkty
         if self.captured_points and self.captured_points_timer > 0:
             for point in self.captured_points:
                 pulse_size = 3 + int(2 * abs(math.sin(self.captured_points_timer * 0.3)))
                 pygame.draw.circle(screen, (255, 0, 0), (int(point[0]), int(point[1])), pulse_size)
                 pygame.draw.circle(screen, (255, 255, 255), (int(point[0]), int(point[1])), pulse_size + 1, 1)
 
+        # Rysuj ślad (zawsze na górze)
         if len(self.trail) > 1:
-            smoothed_trail = scenes.game.smooth_trail_for_drawing(self.trail)
+            if self.game_functions:
+                smoothed_trail = self.game_functions['smooth_trail_for_drawing'](self.trail)
+            else:
+                smoothed_trail = self.trail
             if len(smoothed_trail) > 1:
                 int_trail = [(int(p[0]), int(p[1])) for p in smoothed_trail]
 
@@ -351,6 +367,7 @@ class PaperBot:
 
                 pygame.draw.lines(screen, trail_color, False, int_trail, trail_width)
 
+        # Rysuj bota (zawsze na górze)
         bot_color = self.color
         if self.speed_boost_timer > 0:
             pulse = int(abs(math.sin(self.speed_boost_timer * 0.5)) * 50)
@@ -366,6 +383,7 @@ class PaperBot:
             (self.x - self.size // 2, self.y - self.size // 2, self.size, self.size)
         )
 
+        # Rysuj wskaźnik ścigania powerupu
         if self.target_powerup and not self.target_powerup.collected:
             pygame.draw.line(screen, (255, 255, 0),
                              (int(self.x), int(self.y)),

@@ -510,6 +510,18 @@ class GameScene:
         self.win_ratio = 0.8
 
     def setup_player_references(self):
+        game_functions = {
+            'point_in_polygon': point_in_polygon,
+            'smart_hull': smart_hull,
+            'smooth_trail': smooth_trail,
+            'interpolate_points': interpolate_points,
+            'smooth_trail_for_drawing': smooth_trail_for_drawing
+        }
+
+        self.bot.set_game_functions(game_functions)
+        self.bot2.set_game_functions(game_functions)
+        self.bot3.set_game_functions(game_functions)
+
         self.bot.set_other_players([self.player, self.bot2, self.bot3])
         self.bot2.set_other_players([self.player, self.bot, self.bot3])
         self.bot3.set_other_players([self.player, self.bot, self.bot2])
@@ -556,7 +568,7 @@ class GameScene:
                     bot.area = [p for p in bot.area if not point_in_polygon(p, self.player.area)]
 
                     if len(bot.area) < 3:
-                        bot.die(f"Stracił teren na rzecz gracza")
+                        bot.die(f"Lost territory to player")
 
         if (self.bot.is_alive and not self.bot.is_tracing and
                 hasattr(self.bot, 'just_finished_drawing') and self.bot.just_finished_drawing):
@@ -568,7 +580,7 @@ class GameScene:
                 if len(captured_points) > len(self.player.area) * 0.3:
                     self.player.area = [p for p in self.player.area if not point_in_polygon(p, self.bot.area)]
                     if len(self.player.area) < 3:
-                        self.player.die("Bot 1 przejął twój teren")
+                        self.player.die("Bot 1 captured your territory")
 
             for bot_name, other_bot in [("Bot2", self.bot2), ("Bot3", self.bot3)]:
                 if not other_bot.is_alive:
@@ -577,7 +589,7 @@ class GameScene:
                 if len(captured_points) > len(other_bot.area) * 0.3:
                     other_bot.area = [p for p in other_bot.area if not point_in_polygon(p, self.bot.area)]
                     if len(other_bot.area) < 3:
-                        other_bot.die(f"Stracił teren na rzecz Bot 1")
+                        other_bot.die(f"Lost territory to Bot 1")
 
         if (self.bot2.is_alive and not self.bot2.is_tracing and
                 hasattr(self.bot2, 'just_finished_drawing') and self.bot2.just_finished_drawing):
@@ -589,7 +601,7 @@ class GameScene:
                 if len(captured_points) > len(self.player.area) * 0.3:
                     self.player.area = [p for p in self.player.area if not point_in_polygon(p, self.bot2.area)]
                     if len(self.player.area) < 3:
-                        self.player.die("Bot 2 przejął twój teren")
+                        self.player.die("Bot 2 captured your territory")
 
             for bot_name, other_bot in [("Bot1", self.bot), ("Bot3", self.bot3)]:
                 if not other_bot.is_alive:
@@ -598,7 +610,7 @@ class GameScene:
                 if len(captured_points) > len(other_bot.area) * 0.3:
                     other_bot.area = [p for p in other_bot.area if not point_in_polygon(p, self.bot2.area)]
                     if len(other_bot.area) < 3:
-                        other_bot.die(f"Stracił teren na rzecz Bot 2")
+                        other_bot.die(f"Lost territory to Bot 2")
 
         if (self.bot3.is_alive and not self.bot3.is_tracing and
                 hasattr(self.bot3, 'just_finished_drawing') and self.bot3.just_finished_drawing):
@@ -610,7 +622,7 @@ class GameScene:
                 if len(captured_points) > len(self.player.area) * 0.3:
                     self.player.area = [p for p in self.player.area if not point_in_polygon(p, self.bot3.area)]
                     if len(self.player.area) < 3:
-                        self.player.die("Bot 3 przejął twój teren")
+                        self.player.die("Bot 3 captured your territory")
 
             for bot_name, other_bot in [("Bot1", self.bot), ("Bot2", self.bot2)]:
                 if not other_bot.is_alive:
@@ -619,7 +631,7 @@ class GameScene:
                 if len(captured_points) > len(other_bot.area) * 0.3:
                     other_bot.area = [p for p in other_bot.area if not point_in_polygon(p, self.bot3.area)]
                     if len(other_bot.area) < 3:
-                        other_bot.die(f"Stracił teren na rzecz Bot 3")
+                        other_bot.die(f"Lost territory to Bot 3")
 
     def update(self):
         if self.player.is_alive and (self.bot.is_alive or self.bot2.is_alive or self.bot3.is_alive):
@@ -659,7 +671,7 @@ class GameScene:
             self.bot3.update_captured_points_timer()
 
             if self.bot.is_alive and self.check_trail_collision(self.player, self.bot):
-                self.bot.die("Kolizja ze śladem gracza")
+                self.bot.die("Collision with player's trail")
                 hull_result = smart_hull(self.player.area + self.bot.area)
                 if isinstance(hull_result, tuple):
                     self.player.area = hull_result[0]
@@ -667,7 +679,7 @@ class GameScene:
                     self.player.area = hull_result
 
             if self.bot2.is_alive and self.check_trail_collision(self.player, self.bot2):
-                self.bot2.die("Kolizja ze śladem gracza")
+                self.bot2.die("Collision with player's trail")
                 hull_result = smart_hull(self.player.area + self.bot2.area)
                 if isinstance(hull_result, tuple):
                     self.player.area = hull_result[0]
@@ -675,7 +687,7 @@ class GameScene:
                     self.player.area = hull_result
 
             if self.bot3.is_alive and self.check_trail_collision(self.player, self.bot3):
-                self.bot3.die("Kolizja ze śladem gracza")
+                self.bot3.die("Collision with player's trail")
                 hull_result = smart_hull(self.player.area + self.bot3.area)
                 if isinstance(hull_result, tuple):
                     self.player.area = hull_result[0]
@@ -683,7 +695,7 @@ class GameScene:
                     self.player.area = hull_result
 
             if self.player.is_alive and self.bot.is_alive and self.check_trail_collision(self.bot, self.player):
-                self.player.die("Bot 1 przejął twój ślad")
+                self.player.die("Bot 1 captured your trail")
                 hull_result = smart_hull(self.bot.area + self.player.area)
                 if isinstance(hull_result, tuple):
                     self.bot.area = hull_result[0]
@@ -692,7 +704,7 @@ class GameScene:
                 self.player.area = []
 
             if self.player.is_alive and self.bot2.is_alive and self.check_trail_collision(self.bot2, self.player):
-                self.player.die("Bot 2 przejął twój ślad")
+                self.player.die("Bot 2 captured your trail")
                 hull_result = smart_hull(self.bot2.area + self.player.area)
                 if isinstance(hull_result, tuple):
                     self.bot2.area = hull_result[0]
@@ -701,7 +713,7 @@ class GameScene:
                 self.player.area = []
 
             if self.player.is_alive and self.bot3.is_alive and self.check_trail_collision(self.bot3, self.player):
-                self.player.die("Bot 3 przejął twój ślad")
+                self.player.die("Bot 3 captured your trail")
                 hull_result = smart_hull(self.bot3.area + self.player.area)
                 if isinstance(hull_result, tuple):
                     self.bot3.area = hull_result[0]
@@ -711,7 +723,7 @@ class GameScene:
 
             if self.bot.is_alive and self.bot2.is_alive:
                 if self.check_trail_collision(self.bot, self.bot2):
-                    self.bot2.die("Bot 1 przejął ślad bota 2")
+                    self.bot2.die("Bot 1 captured Bot 2's trail")
                     hull_result = smart_hull(self.bot.area + self.bot2.area)
                     if isinstance(hull_result, tuple):
                         self.bot.area = hull_result[0]
@@ -719,7 +731,7 @@ class GameScene:
                         self.bot.area = hull_result
                     self.bot2.area = []
                 elif self.check_trail_collision(self.bot2, self.bot):
-                    self.bot.die("Bot 2 przejął ślad bota 1")
+                    self.bot.die("Bot 2 captured Bot 1's trail")
                     hull_result = smart_hull(self.bot2.area + self.bot.area)
                     if isinstance(hull_result, tuple):
                         self.bot2.area = hull_result[0]
@@ -729,7 +741,7 @@ class GameScene:
 
             if self.bot.is_alive and self.bot3.is_alive:
                 if self.check_trail_collision(self.bot, self.bot3):
-                    self.bot3.die("Bot 1 przejął ślad bota 3")
+                    self.bot3.die("Bot 1 captured Bot 3's trail")
                     hull_result = smart_hull(self.bot.area + self.bot3.area)
                     if isinstance(hull_result, tuple):
                         self.bot.area = hull_result[0]
@@ -737,7 +749,7 @@ class GameScene:
                         self.bot.area = hull_result
                     self.bot3.area = []
                 elif self.check_trail_collision(self.bot3, self.bot):
-                    self.bot.die("Bot 3 przejął ślad bota 1")
+                    self.bot.die("Bot 3 captured Bot 1's trail")
                     hull_result = smart_hull(self.bot3.area + self.bot.area)
                     if isinstance(hull_result, tuple):
                         self.bot3.area = hull_result[0]
@@ -747,7 +759,7 @@ class GameScene:
 
             if self.bot2.is_alive and self.bot3.is_alive:
                 if self.check_trail_collision(self.bot2, self.bot3):
-                    self.bot3.die("Bot 2 przejął ślad bota 3")
+                    self.bot3.die("Bot 2 captured Bot 3's trail")
                     hull_result = smart_hull(self.bot2.area + self.bot3.area)
                     if isinstance(hull_result, tuple):
                         self.bot2.area = hull_result[0]
@@ -755,7 +767,7 @@ class GameScene:
                         self.bot2.area = hull_result
                     self.bot3.area = []
                 elif self.check_trail_collision(self.bot3, self.bot2):
-                    self.bot2.die("Bot 3 przejął ślad bota 2")
+                    self.bot2.die("Bot 3 captured Bot 2's trail")
                     hull_result = smart_hull(self.bot3.area + self.bot2.area)
                     if isinstance(hull_result, tuple):
                         self.bot3.area = hull_result[0]
@@ -771,19 +783,52 @@ class GameScene:
             bot3_area = self.bot3.calculate_polygon_area(self.bot3.area) if self.bot3.is_alive else 0
 
             if player_area > self.map_area * self.win_ratio:
+                # Zatrzymaj wszystkie dźwięki i odtwórz dźwięk zwycięstwa
+                pygame.mixer.stop()
+                try:
+                    victory_sound = pygame.mixer.Sound("resources/awiwawiwados.mp3")
+                    victory_sound.set_volume(0.05)
+                    victory_sound.play()
+                except pygame.error:
+                    pass
+
                 for bot in [self.bot, self.bot2, self.bot3]:
                     if bot.is_alive:
                         bot.is_alive = False
-                self.player.death_reason = "Zajęto >80% mapy - WYGRANA!"
+                self.player.death_reason = "Captured >80% of map - VICTORY!"
             elif bot_area > self.map_area * self.win_ratio:
+                # Zatrzymaj wszystkie dźwięki i odtwórz dźwięk porażki
+                pygame.mixer.stop()
+                try:
+                    defeat_sound = pygame.mixer.Sound("resources/defeat.mp3")
+                    defeat_sound.set_volume(0.05)
+                    defeat_sound.play()
+                except pygame.error:
+                    pass
                 self.player.is_alive = False
-                self.player.death_reason = "Bot 1 zajął >80% mapy"
+                self.player.death_reason = "Bot 1 captured >80% of map"
             elif bot2_area > self.map_area * self.win_ratio:
+                # Zatrzymaj wszystkie dźwięki i odtwórz dźwięk porażki
+                pygame.mixer.stop()
+                try:
+                    defeat_sound = pygame.mixer.Sound("resources/defeat.mp3")
+                    defeat_sound.set_volume(0.5)
+                    defeat_sound.play()
+                except pygame.error:
+                    pass
                 self.player.is_alive = False
-                self.player.death_reason = "Bot 2 zajął >80% mapy"
+                self.player.death_reason = "Bot 2 captured >80% of map"
             elif bot3_area > self.map_area * self.win_ratio:
+                # Zatrzymaj wszystkie dźwięki i odtwórz dźwięk porażki
+                pygame.mixer.stop()
+                try:
+                    defeat_sound = pygame.mixer.Sound("resources/defeat.mp3")
+                    defeat_sound.set_volume(0.5)
+                    defeat_sound.play()
+                except pygame.error:
+                    pass
                 self.player.is_alive = False
-                self.player.death_reason = "Bot 3 zajął >80% mapy"
+                self.player.death_reason = "Bot 3 captured >80% of map"
         else:
             self.game_over_timer += 1
 
@@ -803,19 +848,97 @@ class GameScene:
         pygame.draw.rect(self.screen, (0, 0, 0), (50, 50, constants.SCREEN_WIDTH - 100, constants.SCREEN_HEIGHT - 100),
                          3)
 
+        # Najpierw rysuj wszystkie obszary (na spodzie)
         if len(self.player.area) > 2:
-            color = (200, 220, 255) if self.player.is_alive else (150, 150, 150)
-            border = (0, 0, 200) if self.player.is_alive else (100, 100, 100)
+            if self.player.is_alive:
+                # Migający efekt podczas powerupu
+                if self.player.speed_boost_timer > 0:
+                    pulse = int(abs(math.sin(self.player.speed_boost_timer * 0.3)) * 50)
+                    color = (min(255, 200 + pulse // 2), min(255, 220 + pulse // 2), 255)
+                    border = (min(255, 0 + pulse), min(255, 0 + pulse), min(255, 200 + pulse))
+                else:
+                    color = (200, 220, 255)
+                    border = (0, 0, 200)
+            else:
+                color = (150, 150, 150)
+                border = (100, 100, 100)
             pygame.draw.polygon(self.screen, color, self.player.area)
             pygame.draw.polygon(self.screen, border, self.player.area, 2)
 
+        # Rysuj obszary botów z efektem powerupu
+        if len(self.bot.area) > 2 and self.bot.is_alive:
+            if self.bot.speed_boost_timer > 0:
+                pulse = int(abs(math.sin(self.bot.speed_boost_timer * 0.3)) * 30)
+                light_color = (
+                    min(255, self.bot.color[0] + 100 + pulse),
+                    min(255, self.bot.color[1] + 100 + pulse),
+                    min(255, self.bot.color[2] + 100 + pulse)
+                )
+                dark_color = (
+                    min(255, max(0, self.bot.color[0] - 50 + pulse)),
+                    min(255, max(0, self.bot.color[1] - 50 + pulse)),
+                    min(255, max(0, self.bot.color[2] - 50 + pulse))
+                )
+            else:
+                light_color = (
+                min(255, self.bot.color[0] + 100), min(255, self.bot.color[1] + 100), min(255, self.bot.color[2] + 100))
+                dark_color = (
+                max(0, self.bot.color[0] - 50), max(0, self.bot.color[1] - 50), max(0, self.bot.color[2] - 50))
+            pygame.draw.polygon(self.screen, light_color, self.bot.area)
+            pygame.draw.polygon(self.screen, dark_color, self.bot.area, 2)
+
+        if len(self.bot2.area) > 2 and self.bot2.is_alive:
+            if self.bot2.speed_boost_timer > 0:
+                pulse = int(abs(math.sin(self.bot2.speed_boost_timer * 0.3)) * 30)
+                light_color = (
+                    min(255, self.bot2.color[0] + 100 + pulse),
+                    min(255, self.bot2.color[1] + 100 + pulse),
+                    min(255, self.bot2.color[2] + 100 + pulse)
+                )
+                dark_color = (
+                    min(255, max(0, self.bot2.color[0] - 50 + pulse)),
+                    min(255, max(0, self.bot2.color[1] - 50 + pulse)),
+                    min(255, max(0, self.bot2.color[2] - 50 + pulse))
+                )
+            else:
+                light_color = (min(255, self.bot2.color[0] + 100), min(255, self.bot2.color[1] + 100),
+                               min(255, self.bot2.color[2] + 100))
+                dark_color = (
+                max(0, self.bot2.color[0] - 50), max(0, self.bot2.color[1] - 50), max(0, self.bot2.color[2] - 50))
+            pygame.draw.polygon(self.screen, light_color, self.bot2.area)
+            pygame.draw.polygon(self.screen, dark_color, self.bot2.area, 2)
+
+        if len(self.bot3.area) > 2 and self.bot3.is_alive:
+            if self.bot3.speed_boost_timer > 0:
+                pulse = int(abs(math.sin(self.bot3.speed_boost_timer * 0.3)) * 30)
+                light_color = (
+                    min(255, self.bot3.color[0] + 100 + pulse),
+                    min(255, self.bot3.color[1] + 100 + pulse),
+                    min(255, self.bot3.color[2] + 100 + pulse)
+                )
+                dark_color = (
+                    min(255, max(0, self.bot3.color[0] - 50 + pulse)),
+                    min(255, max(0, self.bot3.color[1] - 50 + pulse)),
+                    min(255, max(0, self.bot3.color[2] - 50 + pulse))
+                )
+            else:
+                light_color = (min(255, self.bot3.color[0] + 100), min(255, self.bot3.color[1] + 100),
+                               min(255, self.bot3.color[2] + 100))
+                dark_color = (
+                max(0, self.bot3.color[0] - 50), max(0, self.bot3.color[1] - 50), max(0, self.bot3.color[2] - 50))
+            pygame.draw.polygon(self.screen, light_color, self.bot3.area)
+            pygame.draw.polygon(self.screen, dark_color, self.bot3.area, 2)
+
+        # Rysuj powerupy (nad obszarami, ale pod graczami)
         self.powerup_manager.draw(self.screen)
 
+        # Na końcu rysuj graczy i ich ślady (zawsze na górze)
         self.bot.draw(self.screen)
         self.bot2.draw(self.screen)
         self.bot3.draw(self.screen)
         self.player.draw(self.screen)
 
+        # Rysuj procenty
         font = pygame.font.SysFont("arial", 22)
         entities = [
             (self.player, (0, 0, 200)),
@@ -824,7 +947,7 @@ class GameScene:
             (self.bot3, self.bot3.color),
         ]
         for entity, color in entities:
-            if len(entity.area) > 2:
+            if entity.is_alive and len(entity.area) > 2:
                 area = entity.calculate_polygon_area(entity.area)
                 percent = int(100 * area / self.map_area)
                 centroid = entity.calculate_centroid(entity.area)
@@ -838,19 +961,19 @@ class GameScene:
 
     def draw_ui(self):
         area_size = int(self.player.calculate_polygon_area(self.player.area))
-        area_text = self.font.render(f"Obszar: {area_size} px²", True, (0, 0, 0))
+        area_text = self.font.render(f"Area: {area_size} px²", True, (0, 0, 0))
         self.screen.blit(area_text, (10, 10))
 
         if self.player.is_tracing:
-            status_text = self.font.render("Rysowanie", True, (255, 0, 0))
+            status_text = self.font.render("Drawing", True, (255, 0, 0))
             self.screen.blit(status_text, (300, 10))
         else:
-            status_text = self.font.render("W bezpiecznym obszarze", True, (0, 150, 0))
+            status_text = self.font.render("In safe zone", True, (0, 150, 0))
             self.screen.blit(status_text, (300, 10))
 
         if self.player.speed_boost_timer > 0:
             remaining_seconds = self.player.speed_boost_timer // 60 + 1
-            powerup_text = self.font.render(f"PRZYŚPIESZENIE: {remaining_seconds}s", True, (255, 255, 0))
+            powerup_text = self.font.render(f"SPEED BOOST: {remaining_seconds}s", True, (255, 255, 0))
             self.screen.blit(powerup_text, (10, 70))
 
         if constants.USE_TRIANGULATION:
@@ -864,7 +987,7 @@ class GameScene:
         settings_text = self.font.render(f"Hull: {hull_type} | Areas: {smoothing_type}", True, (100, 100, 100))
         self.screen.blit(settings_text, (10, 40))
 
-        instruction_text = self.font.render("Strzałki: sterowanie | ESC: menu | R: restart (po śmierci)", True,
+        instruction_text = self.font.render("Arrow keys: move | ESC: menu | R: restart (after death)", True,
                                             (100, 100, 100))
         self.screen.blit(instruction_text, (10, constants.SCREEN_HEIGHT - 30))
 
@@ -878,20 +1001,20 @@ class GameScene:
             game_over_text = self.big_font.render("GAME OVER", True, (255, 0, 0))
             reason = self.player.death_reason
         else:
-            game_over_text = self.big_font.render("WYGRAŁEŚ!", True, (0, 200, 0))
+            game_over_text = self.big_font.render("YOU WIN!", True, (0, 200, 0))
             reason = self.bot.death_reason
 
         text_rect = game_over_text.get_rect(center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 - 60))
         self.screen.blit(game_over_text, text_rect)
 
-        reason_text = self.font.render(f"Przyczyna: {reason}", True, (255, 255, 255))
+        reason_text = self.font.render(f"Reason: {reason}", True, (255, 255, 255))
         reason_rect = reason_text.get_rect(center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 - 10))
         self.screen.blit(reason_text, reason_rect)
 
-        restart_text = self.font.render("Naciśnij R aby zagrać ponownie", True, (255, 255, 255))
+        restart_text = self.font.render("Press R to play again", True, (255, 255, 255))
         restart_rect = restart_text.get_rect(center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 + 30))
         self.screen.blit(restart_text, restart_rect)
 
-        menu_text = self.font.render("Naciśnij ESC aby wrócić do menu", True, (255, 255, 255))
+        menu_text = self.font.render("Press ESC to return to menu", True, (255, 255, 255))
         menu_rect = menu_text.get_rect(center=(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2 + 60))
         self.screen.blit(menu_text, menu_rect)
