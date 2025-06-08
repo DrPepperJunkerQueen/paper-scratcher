@@ -8,15 +8,16 @@ class SettingsScene:
         self.title_font = pygame.font.Font(constants.TITLE_FONT_PATH, 72)
         self.button_font = pygame.font.SysFont("Comic Sans MS", 36)
         self.small_font = pygame.font.SysFont("Comic Sans MS", 24)
+        self.info_font = pygame.font.SysFont("Comic Sans MS", 18)
         self.next_scene = None
 
         # Przyciski ustawień
-        self.hull_toggle_button = pygame.Rect((constants.SCREEN_WIDTH - 300) // 2, 180, 300, 50)
-        self.triangulation_toggle_button = pygame.Rect((constants.SCREEN_WIDTH - 300) // 2, 240, 300, 50)
-        self.alpha_decrease_button = pygame.Rect((constants.SCREEN_WIDTH - 400) // 2, 300, 60, 50)
-        self.alpha_increase_button = pygame.Rect((constants.SCREEN_WIDTH - 400) // 2 + 340, 300, 60, 50)
-        self.smoothing_toggle_button = pygame.Rect((constants.SCREEN_WIDTH - 300) // 2, 360, 300, 50)
-        self.back_button = pygame.Rect((constants.SCREEN_WIDTH - 200) // 2, 450, 200, 50)
+        self.hull_toggle_button = pygame.Rect((constants.SCREEN_WIDTH - constants.SETTINGS_BUTTONS_WITDH) // 2, 180, constants.SETTINGS_BUTTONS_WITDH, 50)
+        self.triangulation_toggle_button = pygame.Rect((constants.SCREEN_WIDTH - constants.SETTINGS_BUTTONS_WITDH) // 2, 240, constants.SETTINGS_BUTTONS_WITDH, 50)
+        self.alpha_decrease_button = pygame.Rect((constants.SCREEN_WIDTH - 400) // 2, 330, 60, 50)
+        self.alpha_increase_button = pygame.Rect((constants.SCREEN_WIDTH - 400) // 2 + 340, 330, 60, 50)
+        self.smoothing_toggle_button = pygame.Rect((constants.SCREEN_WIDTH - constants.SETTINGS_BUTTONS_WITDH) // 2, 420, constants.SETTINGS_BUTTONS_WITDH, 50)
+        self.back_button = pygame.Rect((constants.SCREEN_WIDTH - 200) // 2, 480, 200, 50)
 
         # Status message
         self.status_message = ""
@@ -80,7 +81,7 @@ class SettingsScene:
 
         # Opis typu otoczki
         desc_text = self.small_font.render("Hull Method (affects area capture mechanics):", True, (255, 255, 255))
-        self.screen.blit(desc_text, ((constants.SCREEN_WIDTH - desc_text.get_width()) / 2, 130))
+        self.screen.blit(desc_text, ((constants.SCREEN_WIDTH - desc_text.get_width()) / 2, 140))
 
         # Przycisk przełączania typu otoczki
         hull_type = "Concave (Realistic)" if constants.USE_CONCAVE_HULL else "Convex (Simple)"
@@ -111,7 +112,7 @@ class SettingsScene:
         # Ustawienia alpha (tylko gdy jest wybrana otoczka wklęsła i nie ma triangulacji)
         if constants.USE_CONCAVE_HULL and not constants.USE_TRIANGULATION:
             alpha_desc = self.small_font.render("Concave Detail Level (lower = more detailed):", True, (255, 255, 255))
-            self.screen.blit(alpha_desc, ((constants.SCREEN_WIDTH - alpha_desc.get_width()) / 2, 270))
+            self.screen.blit(alpha_desc, ((constants.SCREEN_WIDTH - alpha_desc.get_width()) / 2, 290))
 
             # Przycisk zmniejszenia alpha
             pygame.draw.rect(self.screen, (255, 100, 100), self.alpha_decrease_button)
@@ -136,7 +137,7 @@ class SettingsScene:
 
         # Przycisk przełączania wygładzania obszarów
         smoothing_desc = self.small_font.render("Area Smoothing (affects visual quality):", True, (255, 255, 255))
-        self.screen.blit(smoothing_desc, ((constants.SCREEN_WIDTH - smoothing_desc.get_width()) / 2, 330))
+        self.screen.blit(smoothing_desc, ((constants.SCREEN_WIDTH - smoothing_desc.get_width()) / 2, 380))
 
         smoothing_type = "Smooth Areas" if constants.AREA_SMOOTHING else "Sharp Areas"
         smoothing_color = (0, 255, 0) if constants.AREA_SMOOTHING else (255, 255, 0)
@@ -170,5 +171,5 @@ class SettingsScene:
         ]
 
         for i, line in enumerate(info_lines):
-            info_text = self.small_font.render(line, True, (150, 150, 150))
-            self.screen.blit(info_text, ((constants.SCREEN_WIDTH - info_text.get_width()) / 2, 520 + i * 25))
+            info_text = info_text = self.info_font.render(line, True, (150, 150, 150))
+            self.screen.blit(info_text, ((constants.SCREEN_WIDTH - info_text.get_width()) / 2, 620 + i * 25))
