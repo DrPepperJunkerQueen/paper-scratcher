@@ -31,14 +31,108 @@ def convex_hull(points):
     return hull
 
 
-def concave_hull_alpha_shapes(points, alpha=None):
-    """Implementacja otoczki wklęsłej za pomocą alpha shapes"""
+def concave_hull_simple(points, max_edge_length=50):
+    """Prosta implementacja concave hull - usuwa długie krawędzie z convex hull"""
     if len(points) < 3:
         return points
 
-    # Użyj alpha z ustawień jeśli nie podano
+    # Najpierw stwórz convex hull
+    convex = convex_hull(points)
+    if len(convex) < 3:
+        return convex
+
+    # Znajdź wszystkie punkty wewnątrz convex hull
+    inner_points = []
+    for point in points:
+        if point not in convex:
+            inner_points.append(point)
+
+    if not inner_points:
+        return convex
+
+    # Sprawdź każdą krawędź convex hull
+    concave_points = []
+    for i in range(len(convex)):
+        current_point = convex[i]
+        next_point = convex[(i + 1) % len(convex)]
+
+        concave_points.append(current_point)
+
+        # Oblicz długość krawędzi
+        edge_length = distance_between_points(current_point, next_point)
+
+        # Jeśli krawędź jest długa, spróbuj znaleźć punkty pośrednie
+        if edge_length > max_edge_length:
+            # Znajdź punkty wewnętrzne które są blisko tej krawędzi
+            edge_points = []
+            for inner_point in inner_points:
+                dist_to_edge = distance_point_to_segment(inner_point, current_point, next_point)
+                if dist_to_edge < max_edge_length * 0.3:
+                    edge_points.append(inner_point)
+
+            # Sortuj punkty wzdłuż krawędzi
+            if edge_points:
+                def distance_along_edge(p):
+                    # Projekcja punktu na krawędź
+                    dx = next_point[0] - current_point[0]
+                    dy = next_point[1] - current_point[1]
+                    if dx == 0 and dy == 0:
+                        return 0
+                    t = ((p[0] - current_point[0]) * dx + (p[1] - current_point[1]) * dy) / (dx * dx + dy * dy)
+                    return max(0, min(1, t))
+
+                edge_points.sort(key=distance_along_edge)
+                concave_points.extend(edge_points)
+
+    return concave_points if len(concave_points) >= 3 else convex
+
+
+def concave_hull_alpha_shapes(points, alpha=None):
+    """Ulepszona implementacja concave hull używając prostej metody"""
     if alpha is None:
         alpha = constants.CONCAVE_ALPHA
+
+    # Przekonwertuj alpha na max_edge_length
+    max_edge_length = 100.0 / alpha  # Im mniejszy alpha, tym mniejsze dozwolone krawędzie
+
+    return concave_hull_simple(points, max_edge_length)
+
+
+def smooth_trail_for_drawing(trail, smoothing_factor=2):
+    """Wygładź ślad do rysowania (mniej agresywne niż dla obszarów)"""
+    if len(trail) < smoothing_factor * 2 or not constants.AREA_SMOOTHING:
+        return trail
+
+    smoothed = []
+    for i in range(len(trail)):
+        if i < smoothing_factor or i >= len(trail) - smoothing_factor:
+            # Zachowaj punkty na końcach bez zmian
+            smoothed.append(trail[i])
+        else:
+            # Lekkie uśrednianie z sąsiadującymi punktami
+            sum_x = 0
+            sum_y = 0
+            count = 0
+
+            for j in range(-smoothing_factor, smoothing_factor + 1):
+                if 0 <= i + j < len(trail):
+                    weight = 1.0 - abs(j) * 0.3  # Mniejsza waga dla dalszych punktów
+                    sum_x += trail[i + j][0] * weight
+                    sum_y += trail[i + j][1] * weight
+                    count += weight
+
+            if count > 0:
+                smoothed.append((sum_x / count, sum_y / count))
+            else:
+                smoothed.append(trail[i])
+
+    return smoothed
+
+
+def delaunay_triangulation_simple(points):
+    """Prosta implementacja triangulacji Delaunay"""
+    if len(points) < 3:
+        return []
 
     # Usuń duplikaty punktów
     unique_points = []
@@ -52,13 +146,12 @@ def concave_hull_alpha_shapes(points, alpha=None):
             unique_points.append(point)
 
     if len(unique_points) < 3:
-        return unique_points
+        return []
 
-    # Prosta implementacja alpha shapes
-    # 1. Znajdź wszystkie możliwe trójkąty
     triangles = []
     n = len(unique_points)
 
+    # Dla każdej kombinacji 3 punktów
     for i in range(n):
         for j in range(i + 1, n):
             for k in range(j + 1, n):
@@ -68,128 +161,211 @@ def concave_hull_alpha_shapes(points, alpha=None):
                 if abs(cross_product(p1, p2, p3)) < 1e-10:
                     continue
 
-                # Oblicz promień okręgu opisanego na trójkącie
-                circumradius = calculate_circumradius(p1, p2, p3)
+                # Sprawdź czy żaden inny punkt nie jest wewnątrz okręgu opisanego
+                is_delaunay = True
+                circumcenter = calculate_circumcenter(p1, p2, p3)
+                circumradius_sq = distance_between_points(circumcenter, p1) ** 2
 
-                # Jeśli promień jest mniejszy niż 1/alpha, dodaj trójkąt
-                if circumradius <= 1.0 / alpha:
-                    triangles.append([i, j, k])
+                for l in range(n):
+                    if l == i or l == j or l == k:
+                        continue
 
+                    test_point = unique_points[l]
+                    dist_sq = distance_between_points(circumcenter, test_point) ** 2
+
+                    if dist_sq < circumradius_sq - 1e-10:  # Punkt wewnątrz okręgu
+                        is_delaunay = False
+                        break
+
+                if is_delaunay:
+                    triangles.append([p1, p2, p3])
+
+    return triangles
+
+
+def calculate_circumcenter(p1, p2, p3):
+    """Oblicz środek okręgu opisanego na trójkącie"""
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+
+    denom = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
+    if abs(denom) < 1e-10:
+        # Punkty współliniowe
+        return ((x1 + x2 + x3) / 3, (y1 + y2 + y3) / 3)
+
+    ux = ((x1 * x1 + y1 * y1) * (y2 - y3) + (x2 * x2 + y2 * y2) * (y3 - y1) + (x3 * x3 + y3 * y3) * (y1 - y2)) / denom
+    uy = ((x1 * x1 + y1 * y1) * (x3 - x2) + (x2 * x2 + y2 * y2) * (x1 - x3) + (x3 * x3 + y3 * y3) * (x2 - x1)) / denom
+
+    return (ux, uy)
+
+
+def triangulated_hull(points):
+    """Stwórz obszar z triangulacji gdzie każdy trójkąt ma swoją mini-otoczkę"""
+    if len(points) < 3:
+        return points, []  # Zwróć też pustą listę trójkątów
+
+    # Stwórz triangulację
+    triangles = delaunay_triangulation_simple(points)
     if not triangles:
-        # Jeśli nie ma odpowiednich trójkątów, użyj otoczki wypukłej
-        return convex_hull(unique_points)
+        return convex_hull(points), []
 
-    # 2. Znajdź krawędzie brzegowe (które należą tylko do jednego trójkąta)
-    edge_count = {}
+    # Dla każdego trójkąta stwórz mini-otoczkę z rozszerzeniem
+    all_hull_points = []
+    expansion_radius = 8  # Promień rozszerzenia każdego trójkąta
+
     for triangle in triangles:
-        edges = [
-            (min(triangle[0], triangle[1]), max(triangle[0], triangle[1])),
-            (min(triangle[1], triangle[2]), max(triangle[1], triangle[2])),
-            (min(triangle[0], triangle[2]), max(triangle[0], triangle[2]))
-        ]
-        for edge in edges:
-            edge_count[edge] = edge_count.get(edge, 0) + 1
+        # Znajdź środek trójkąta
+        center_x = sum(p[0] for p in triangle) / 3
+        center_y = sum(p[1] for p in triangle) / 3
+        center = (center_x, center_y)
 
-    # Krawędzie brzegowe to te które występują tylko raz
-    boundary_edges = [edge for edge, count in edge_count.items() if count == 1]
+        # Dla każdego wierzchołka trójkąta stwórz punkty w okręgu
+        triangle_hull = []
+        for point in triangle:
+            # Dodaj oryginalny punkt
+            triangle_hull.append(point)
 
-    if not boundary_edges:
-        return convex_hull(unique_points)
+            # Dodaj punkty w okręgu wokół każdego wierzchołka
+            for angle in range(0, 360, 45):  # Co 45 stopni
+                rad = math.radians(angle)
+                expanded_x = point[0] + expansion_radius * math.cos(rad)
+                expanded_y = point[1] + expansion_radius * math.sin(rad)
+                triangle_hull.append((expanded_x, expanded_y))
 
-    # 3. Zbuduj kontury z krawędzi brzegowych
-    contour = build_contour_from_edges(boundary_edges, unique_points)
+        # Stwórz mini-otoczkę dla tego trójkąta
+        if len(triangle_hull) >= 3:
+            mini_hull = convex_hull(triangle_hull)
+            all_hull_points.extend(mini_hull)
 
-    return contour if len(contour) >= 3 else convex_hull(unique_points)
+    # Usuń duplikaty i stwórz finalną otoczkę
+    unique_hull_points = []
+    for point in all_hull_points:
+        is_duplicate = False
+        for existing in unique_hull_points:
+            if distance_between_points(point, existing) < 5:
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            unique_hull_points.append(point)
 
-
-def calculate_circumradius(p1, p2, p3):
-    """Oblicz promień okręgu opisanego na trójkącie"""
-    # Długości boków
-    a = distance_between_points(p2, p3)
-    b = distance_between_points(p1, p3)
-    c = distance_between_points(p1, p2)
-
-    # Pole trójkąta (wzór Herona)
-    s = (a + b + c) / 2
-    area_squared = s * (s - a) * (s - b) * (s - c)
-
-    if area_squared <= 0:
-        return float('inf')
-
-    area = math.sqrt(area_squared)
-
-    # Promień okręgu opisanego
-    if area == 0:
-        return float('inf')
-
-    return (a * b * c) / (4 * area)
-
-
-def build_contour_from_edges(edges, points):
-    """Zbuduj kontur z listy krawędzi"""
-    if not edges:
-        return []
-
-    # Stwórz graf sąsiedztwa
-    graph = {}
-    for edge in edges:
-        p1, p2 = edge
-        if p1 not in graph:
-            graph[p1] = []
-        if p2 not in graph:
-            graph[p2] = []
-        graph[p1].append(p2)
-        graph[p2].append(p1)
-
-    # Znajdź najdłuższy cykl
-    visited = set()
-    longest_path = []
-
-    for start_node in graph:
-        if start_node in visited:
-            continue
-
-        path = find_longest_cycle(graph, start_node, visited.copy())
-        if len(path) > len(longest_path):
-            longest_path = path
-
-    # Przekonwertuj indeksy na punkty
-    if longest_path:
-        return [points[i] for i in longest_path]
-    else:
-        return []
-
-
-def find_longest_cycle(graph, start, visited):
-    """Znajdź najdłuższy cykl zaczynający się od danego węzła"""
-
-    def dfs(node, path):
-        if node in visited:
-            if node == start and len(path) > 2:
-                return path
-            else:
-                return []
-
-        visited.add(node)
-        longest = []
-
-        for neighbor in graph.get(node, []):
-            result = dfs(neighbor, path + [neighbor])
-            if len(result) > len(longest):
-                longest = result
-
-        visited.remove(node)
-        return longest
-
-    return dfs(start, [start])
+    final_hull = convex_hull(unique_hull_points) if len(unique_hull_points) >= 3 else convex_hull(points)
+    return final_hull, triangles  # Zwróć både hull i trójkąty
 
 
 def smart_hull(points):
     """Wybierz odpowiednią metodę otoczki na podstawie ustawień"""
-    if constants.USE_CONCAVE_HULL:
-        return concave_hull_alpha_shapes(points)
+    if constants.USE_TRIANGULATION:
+        hull, triangles = triangulated_hull(points)
+        return hull, triangles
+    elif constants.USE_CONCAVE_HULL:
+        return concave_hull_alpha_shapes(points), []
     else:
-        return convex_hull(points)
+        return convex_hull(points), []
+
+
+def interpolate_points(points, density=5):
+    """Dodaj punkty pośrednie między istniejącymi punktami dla gładszego obszaru"""
+    if len(points) < 2 or not constants.AREA_SMOOTHING:
+        return points
+
+    interpolated = []
+    for i in range(len(points)):
+        current_point = points[i]
+        next_point = points[(i + 1) % len(points)]
+
+        # Dodaj aktualny punkt
+        interpolated.append(current_point)
+
+        # Oblicz odległość między punktami
+        dx = next_point[0] - current_point[0]
+        dy = next_point[1] - current_point[1]
+        distance = math.sqrt(dx * dx + dy * dy)
+
+        # Dodaj punkty pośrednie tylko jeśli odległość jest wystarczająco duża
+        if distance > density * 2:
+            num_interpolated = int(distance // density)
+            for j in range(1, num_interpolated):
+                t = j / num_interpolated
+                interp_x = current_point[0] + t * dx
+                interp_y = current_point[1] + t * dy
+                interpolated.append((interp_x, interp_y))
+
+    return interpolated
+
+
+def smooth_trail(trail, smoothing_factor=3):
+    """Wygładź ślad przez uśrednianie sąsiadujących punktów"""
+    if len(trail) < smoothing_factor * 2 or not constants.AREA_SMOOTHING:
+        return trail
+
+    smoothed = []
+    for i in range(len(trail)):
+        if i < smoothing_factor or i >= len(trail) - smoothing_factor:
+            # Zachowaj punkty na końcach bez zmian
+            smoothed.append(trail[i])
+        else:
+            # Uśrednij z sąsiadującymi punktami
+            sum_x = 0
+            sum_y = 0
+            count = 0
+
+            for j in range(-smoothing_factor, smoothing_factor + 1):
+                if 0 <= i + j < len(trail):
+                    sum_x += trail[i + j][0]
+                    sum_y += trail[i + j][1]
+                    count += 1
+
+            if count > 0:
+                smoothed.append((sum_x / count, sum_y / count))
+            else:
+                smoothed.append(trail[i])
+
+    return smoothed[0]
+    dy = next_point[1] - current_point[1]
+    distance = math.sqrt(dx * dx + dy * dy)
+
+    # Dodaj punkty pośrednie tylko jeśli odległość jest wystarczająco duża
+    if distance > density * 2:
+        num_interpolated = int(distance // density)
+        for j in range(1, num_interpolated):
+            t = j / num_interpolated
+            interp_x = current_point[0] + t * dx
+            interp_y = current_point[1] + t * dy
+            interpolated.append((interp_x, interp_y))
+
+
+    return interpolated
+
+
+def smooth_trail(trail, smoothing_factor=3):
+    """Wygładź ślad przez uśrednianie sąsiadujących punktów"""
+    if len(trail) < smoothing_factor * 2:
+        return trail
+
+    smoothed = []
+    for i in range(len(trail)):
+        if i < smoothing_factor or i >= len(trail) - smoothing_factor:
+            # Zachowaj punkty na końcach bez zmian
+            smoothed.append(trail[i])
+        else:
+            # Uśrednij z sąsiadującymi punktami
+            sum_x = 0
+            sum_y = 0
+            count = 0
+
+            for j in range(-smoothing_factor, smoothing_factor + 1):
+                if 0 <= i + j < len(trail):
+                    sum_x += trail[i + j][0]
+                    sum_y += trail[i + j][1]
+                    count += 1
+
+            if count > 0:
+                smoothed.append((sum_x / count, sum_y / count))
+            else:
+                smoothed.append(trail[i])
+
+    return smoothed
 
 
 def cross_product(o, a, b):
@@ -720,9 +896,40 @@ class GameScene:
             if self.bot3.is_alive:
                 self.bot3.move(self.speed)
 
+            # NOWE: Aktualizuj timery przejętych punktów
+            self.player.update_captured_points_timer()
+            self.bot.update_captured_points_timer()
+            self.bot2.update_captured_points_timer()
+            self.bot3.update_captured_points_timer()
+
             # 1. Kolizje gracza z botami (gracz zabija bota przez najechanie na ślad)
             if self.bot.is_alive and self.check_trail_collision(self.player, self.bot):
                 print("!!! KOLIZJA: Gracz najechał na ślad bota 1 !!!")
+                self.bot.die("Kolizja ze śladem gracza")
+                hull_result = smart_hull(self.player.area + self.bot.area)
+                if isinstance(hull_result, tuple):
+                    self.player.area = hull_result[0]
+                else:
+                    self.player.area = hull_result
+
+            if self.bot2.is_alive and self.check_trail_collision(self.player, self.bot2):
+                print("!!! KOLIZJA: Gracz najechał na ślad bota 2 !!!")
+                self.bot2.die("Kolizja ze śladem gracza")
+                hull_result = smart_hull(self.player.area + self.bot2.area)
+                if isinstance(hull_result, tuple):
+                    self.player.area = hull_result[0]
+                else:
+                    self.player.area = hull_result
+
+            if self.bot3.is_alive and self.check_trail_collision(self.player, self.bot3):
+                print("!!! KOLIZJA: Gracz najechał na ślad bota 3 !!!")
+                self.bot3.die("Kolizja ze śladem gracza")
+                hull_result = smart_hull(self.player.area + self.bot3.area)
+                if isinstance(hull_result, tuple):
+                    self.player.area = hull_result[0]
+                else:
+                    self.player.area = hull_result
+
                 self.bot.die("Kolizja ze śladem gracza")
                 self.player.area = smart_hull(self.player.area + self.bot.area)
 
@@ -740,19 +947,31 @@ class GameScene:
             if self.player.is_alive and self.bot.is_alive and self.check_trail_collision(self.bot, self.player):
                 print("!!! KOLIZJA: Bot 1 najechał na ślad gracza !!!")
                 self.player.die("Bot 1 przejął twój ślad")
-                self.bot.area = smart_hull(self.bot.area + self.player.area)
+                hull_result = smart_hull(self.bot.area + self.player.area)
+                if isinstance(hull_result, tuple):
+                    self.bot.area = hull_result[0]
+                else:
+                    self.bot.area = hull_result
                 self.player.area = []
 
             if self.player.is_alive and self.bot2.is_alive and self.check_trail_collision(self.bot2, self.player):
                 print("!!! KOLIZJA: Bot 2 najechał na ślad gracza !!!")
                 self.player.die("Bot 2 przejął twój ślad")
-                self.bot2.area = smart_hull(self.bot2.area + self.player.area)
+                hull_result = smart_hull(self.bot2.area + self.player.area)
+                if isinstance(hull_result, tuple):
+                    self.bot2.area = hull_result[0]
+                else:
+                    self.bot2.area = hull_result
                 self.player.area = []
 
             if self.player.is_alive and self.bot3.is_alive and self.check_trail_collision(self.bot3, self.player):
                 print("!!! KOLIZJA: Bot 3 najechał na ślad gracza !!!")
                 self.player.die("Bot 3 przejął twój ślad")
-                self.bot3.area = smart_hull(self.bot3.area + self.player.area)
+                hull_result = smart_hull(self.bot3.area + self.player.area)
+                if isinstance(hull_result, tuple):
+                    self.bot3.area = hull_result[0]
+                else:
+                    self.bot3.area = hull_result
                 self.player.area = []
 
             # 3. NOWE: Kolizje bot vs bot (boty zabijają się nawzajem przez najechanie na ślady)
@@ -762,12 +981,20 @@ class GameScene:
                 if self.check_trail_collision(self.bot, self.bot2):
                     print("!!! KOLIZJA: Bot 1 najechał na ślad bota 2 !!!")
                     self.bot2.die("Bot 1 przejął ślad bota 2")
-                    self.bot.area = smart_hull(self.bot.area + self.bot2.area)
+                    hull_result = smart_hull(self.bot.area + self.bot2.area)
+                    if isinstance(hull_result, tuple):
+                        self.bot.area = hull_result[0]
+                    else:
+                        self.bot.area = hull_result
                     self.bot2.area = []
                 elif self.check_trail_collision(self.bot2, self.bot):
                     print("!!! KOLIZJA: Bot 2 najechał na ślad bota 1 !!!")
                     self.bot.die("Bot 2 przejął ślad bota 1")
-                    self.bot2.area = smart_hull(self.bot2.area + self.bot.area)
+                    hull_result = smart_hull(self.bot2.area + self.bot.area)
+                    if isinstance(hull_result, tuple):
+                        self.bot2.area = hull_result[0]
+                    else:
+                        self.bot2.area = hull_result
                     self.bot.area = []
 
             # Bot 1 vs Bot 3
@@ -775,12 +1002,20 @@ class GameScene:
                 if self.check_trail_collision(self.bot, self.bot3):
                     print("!!! KOLIZJA: Bot 1 najechał na ślad bota 3 !!!")
                     self.bot3.die("Bot 1 przejął ślad bota 3")
-                    self.bot.area = smart_hull(self.bot.area + self.bot3.area)
+                    hull_result = smart_hull(self.bot.area + self.bot3.area)
+                    if isinstance(hull_result, tuple):
+                        self.bot.area = hull_result[0]
+                    else:
+                        self.bot.area = hull_result
                     self.bot3.area = []
                 elif self.check_trail_collision(self.bot3, self.bot):
                     print("!!! KOLIZJA: Bot 3 najechał na ślad bota 1 !!!")
                     self.bot.die("Bot 3 przejął ślad bota 1")
-                    self.bot3.area = smart_hull(self.bot3.area + self.bot.area)
+                    hull_result = smart_hull(self.bot3.area + self.bot.area)
+                    if isinstance(hull_result, tuple):
+                        self.bot3.area = hull_result[0]
+                    else:
+                        self.bot3.area = hull_result
                     self.bot.area = []
 
             # Bot 2 vs Bot 3
@@ -788,12 +1023,20 @@ class GameScene:
                 if self.check_trail_collision(self.bot2, self.bot3):
                     print("!!! KOLIZJA: Bot 2 najechał na ślad bota 3 !!!")
                     self.bot3.die("Bot 2 przejął ślad bota 3")
-                    self.bot2.area = smart_hull(self.bot2.area + self.bot3.area)
+                    hull_result = smart_hull(self.bot2.area + self.bot3.area)
+                    if isinstance(hull_result, tuple):
+                        self.bot2.area = hull_result[0]
+                    else:
+                        self.bot2.area = hull_result
                     self.bot3.area = []
                 elif self.check_trail_collision(self.bot3, self.bot2):
                     print("!!! KOLIZJA: Bot 3 najechał na ślad bota 2 !!!")
                     self.bot2.die("Bot 3 przejął ślad bota 2")
-                    self.bot3.area = smart_hull(self.bot3.area + self.bot2.area)
+                    hull_result = smart_hull(self.bot3.area + self.bot2.area)
+                    if isinstance(hull_result, tuple):
+                        self.bot3.area = hull_result[0]
+                    else:
+                        self.bot3.area = hull_result
                     self.bot2.area = []
 
             # 4. Sprawdź przejęcia terenu gdy ktoś kończy rysowanie (gracz i boty)
@@ -889,10 +1132,17 @@ class GameScene:
             status_text = self.font.render("W bezpiecznym obszarze", True, (0, 150, 0))
             self.screen.blit(status_text, (300, 10))
 
-        # Pokaż typ otoczki
-        hull_type = "Concave (Realistic)" if constants.USE_CONCAVE_HULL else "Convex (Simple)"
-        hull_text = self.font.render(f"Hull: {hull_type}", True, (100, 100, 100))
-        self.screen.blit(hull_text, (10, 40))
+        # Pokaż typ otoczki i wygładzanie
+        if constants.USE_TRIANGULATION:
+            hull_type = "Triangulated"
+        elif constants.USE_CONCAVE_HULL:
+            hull_type = "Concave"
+        else:
+            hull_type = "Convex"
+
+        smoothing_type = "Smooth" if constants.AREA_SMOOTHING else "Sharp"
+        settings_text = self.font.render(f"Hull: {hull_type} | Areas: {smoothing_type}", True, (100, 100, 100))
+        self.screen.blit(settings_text, (10, 40))
 
         # Instrukcje
         instruction_text = self.font.render("Strzałki: sterowanie | ESC: menu | R: restart (po śmierci)", True,

@@ -16,3 +16,5 @@ SKIN_SIZE = 15  # Rozmiar skina na planszy
 # NOWE: Ustawienia otoczki
 USE_CONCAVE_HULL = True  # True = otoczka wklęsła (bardziej realistyczna), False = otoczka wypukła
 CONCAVE_ALPHA = 2.0  # Parametr alpha dla algorytmu alpha shapes (im mniejszy, tym bardziej szczegółowa otoczka)
+AREA_SMOOTHING = True  # True = gładkie obszary z interpolacją punktów, False = obszary bez wygładzania
+USE_TRIANGULATION = False  # True = triangulacja z indywidualną otoczką, False = standardowa otoczka

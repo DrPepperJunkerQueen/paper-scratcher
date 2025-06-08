@@ -22,6 +22,13 @@ class PaperPlayer:
         self.just_finished_drawing = False  # NOWA FLAGA do sprawdzania przejęć
         self.other_bots = []  # NOWE: Lista wszystkich botów
 
+        # NOWE: Przejęte punkty do wizualizacji
+        self.captured_points = []
+        self.captured_points_timer = 0
+
+        # NOWE: Trójkąty triangulacji do wizualizacji
+        self.triangles = []
+
         # Wczytaj wybrany skin
         self.skin_image = None
         self.load_skin()
@@ -33,6 +40,13 @@ class PaperPlayer:
             (x + margin, y + margin),
             (x - margin, y + margin)
         ]
+
+    def update_captured_points_timer(self):
+        """Aktualizuj timer przejętych punktów"""
+        if self.captured_points_timer > 0:
+            self.captured_points_timer -= 1
+            if self.captured_points_timer <= 0:
+                self.captured_points = []
 
     def load_skin(self):
         """Wczytaj wybrany skin"""
@@ -169,12 +183,20 @@ class PaperPlayer:
 
                     # Przebuduj obszar bota
                     if len(bot.area) >= 3:
-                        bot.area = scenes.game.smart_hull(bot.area)
+                        hull_result = scenes.game.smart_hull(bot.area)
+                        if isinstance(hull_result, tuple):
+                            bot.area = hull_result[0]
+                        else:
+                            bot.area = hull_result
                     else:
                         bot.area = []
 
                     # Przebuduj nasz obszar z przejętymi punktami
-                    new_area = scenes.game.smart_hull(new_area)
+                    hull_result = scenes.game.smart_hull(new_area)
+                    if isinstance(hull_result, tuple):
+                        new_area = hull_result[0]
+                    else:
+                        new_area = hull_result
 
                     print(f"Gracz przejął {len(taken_points)} punktów od bota!")
 
@@ -182,18 +204,21 @@ class PaperPlayer:
 
     def create_simple_expansion(self):
         """Prosta ekspansja - dodaj ślad do istniejącego obszaru"""
-        # Połącz obszar i ślad
+        # Wygładź ślad przed dodaniem do obszaru
+        smoothed_trail = scenes.game.smooth_trail(self.trail)
+
+        # Dodaj punkty pośrednie do śladu dla gładszego obszaru
+        interpolated_trail = scenes.game.interpolate_points(smoothed_trail, density=8)
+
+        # Połącz obszar i wygładzony ślad
         all_points = []
-
-        # Dodaj punkty obszaru
         all_points.extend(self.area)
-
-        # Dodaj punkty śladu
-        all_points.extend(self.trail)
+        all_points.extend(interpolated_trail)
 
         # Użyj smart_hull zamiast convex_hull
         if len(all_points) >= 3:
-            hull = scenes.game.smart_hull(all_points)
+            hull, triangles = scenes.game.smart_hull(all_points)
+            self.triangles = triangles  # Zapisz trójkąty do wizualizacji
             return self.clean_area(hull)
 
         return None
@@ -203,14 +228,14 @@ class PaperPlayer:
         if len(points) < 3:
             return points
 
-        # Usuń duplikaty
+        # Usuń duplikaty - mniejsza tolerancja dla gładszych obszarów
         cleaned = []
         for point in points:
-            if not cleaned or self.distance(point, cleaned[-1]) > 8:
+            if not cleaned or self.distance(point, cleaned[-1]) > 5:  # Zmniejszono z 8 do 5
                 cleaned.append(point)
 
         # Usuń punkt końcowy jeśli jest za blisko pierwszego
-        if len(cleaned) > 2 and self.distance(cleaned[0], cleaned[-1]) <= 8:
+        if len(cleaned) > 2 and self.distance(cleaned[0], cleaned[-1]) <= 5:  # Zmniejszono z 8 do 5
             cleaned.pop()
 
         # Jeśli zbyt mało punktów, zwróć oryginalny obszar
@@ -252,13 +277,39 @@ class PaperPlayer:
                 pygame.draw.polygon(screen, (150, 150, 150), self.area)
                 pygame.draw.polygon(screen, (100, 100, 100), self.area, 2)
 
-        # Rysuj ślad
+        # NOWE: Rysuj trójkąty triangulacji
+        if constants.USE_TRIANGULATION and self.triangles:
+            for triangle in self.triangles:
+                # Rysuj krawędzie trójkąta w kolorze gracza
+                triangle_color = (0, 0, 150) if self.is_alive else (80, 80, 80)
+                # Konwertuj na int dla pygame
+                int_triangle = [(int(p[0]), int(p[1])) for p in triangle]
+                pygame.draw.polygon(screen, triangle_color, int_triangle, 2)
+
+                # Rysuj wierzchołki jako małe kółka
+                for point in triangle:
+                    pygame.draw.circle(screen, triangle_color, (int(point[0]), int(point[1])), 3)
+
+        # NOWE: Rysuj przejęte punkty na czerwono
+        if self.captured_points and self.captured_points_timer > 0:
+            for point in self.captured_points:
+                # Rysuj czerwony punkt z efektem pulsowania
+                pulse_size = 3 + int(2 * abs(math.sin(self.captured_points_timer * 0.3)))
+                pygame.draw.circle(screen, (255, 0, 0), (int(point[0]), int(point[1])), pulse_size)
+                # Dodaj białe obramowanie dla lepszej widoczności
+                pygame.draw.circle(screen, (255, 255, 255), (int(point[0]), int(point[1])), pulse_size + 1, 1)
+
+        # Rysuj ślad - NOWE: z wygładzaniem
         if len(self.trail) > 1:
-            if self.is_alive:
-                pygame.draw.lines(screen, (255, 0, 0), False, self.trail, 3)
-            else:
-                # Jeśli gracz nie żyje, rysuj ślad w ciemniejszym kolorze
-                pygame.draw.lines(screen, (150, 0, 0), False, self.trail, 3)
+            smoothed_trail = scenes.game.smooth_trail_for_drawing(self.trail)
+            if len(smoothed_trail) > 1:
+                # Konwertuj na int dla pygame
+                int_trail = [(int(p[0]), int(p[1])) for p in smoothed_trail]
+                if self.is_alive:
+                    pygame.draw.lines(screen, (255, 0, 0), False, int_trail, 3)
+                else:
+                    # Jeśli gracz nie żyje, rysuj ślad w ciemniejszym kolorze
+                    pygame.draw.lines(screen, (150, 0, 0), False, int_trail, 3)
 
         # Rysuj gracza - użyj visual_size dla wyświetlania
         if self.skin_image and self.is_alive:

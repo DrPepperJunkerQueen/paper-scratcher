@@ -24,6 +24,13 @@ class PaperBot:
         # NOWE: Referencje do innych graczy (będą ustawione przez GameScene)
         self.other_players = []
 
+        # NOWE: Przejęte punkty do wizualizacji
+        self.captured_points = []
+        self.captured_points_timer = 0
+
+        # NOWE: Trójkąty triangulacji do wizualizacji
+        self.triangles = []
+
         margin = 40
         self.area = [
             (x - margin, y - margin),
@@ -35,6 +42,13 @@ class PaperBot:
     def set_other_players(self, players):
         """Ustaw referencje do innych graczy dla logiki przejmowania obszarów"""
         self.other_players = players
+
+    def update_captured_points_timer(self):
+        """Aktualizuj timer przejętych punktów"""
+        if self.captured_points_timer > 0:
+            self.captured_points_timer -= 1
+            if self.captured_points_timer <= 0:
+                self.captured_points = []
 
     def calculate_polygon_area(self, points):
         """Oblicz powierzchnię wielokąta"""
@@ -118,6 +132,8 @@ class PaperBot:
         # Stwórz nowy obszar z śladu i istniejącego obszaru
         new_area = self.create_area_expansion()
         if new_area and len(new_area) >= 3:
+            all_captured_points = []  # Zbierz wszystkie przejęte punkty
+
             # Przejmij obszary od innych graczy
             for other_player in self.other_players:
                 if not other_player.is_alive:
@@ -125,6 +141,9 @@ class PaperBot:
 
                 taken_points = [p for p in other_player.area if scenes.game.point_in_polygon(p, new_area)]
                 if taken_points:
+                    # Dodaj do listy przejętych punktów do wizualizacji
+                    all_captured_points.extend(taken_points)
+
                     # Usuń przejęte punkty z obszaru przeciwnika
                     other_player.area = [p for p in other_player.area if not scenes.game.point_in_polygon(p, new_area)]
 
@@ -133,27 +152,47 @@ class PaperBot:
 
                     # Przebuduj obszar przeciwnika
                     if len(other_player.area) >= 3:
-                        other_player.area = scenes.game.smart_hull(other_player.area)
+                        hull_result = scenes.game.smart_hull(other_player.area)
+                        if isinstance(hull_result, tuple):
+                            other_player.area = hull_result[0]
+                        else:
+                            other_player.area = hull_result
                     else:
                         other_player.area = []
 
                     # Przebuduj nasz obszar z przejętymi punktami
-                    new_area = scenes.game.smart_hull(new_area)
+                    hull_result = scenes.game.smart_hull(new_area)
+                    if isinstance(hull_result, tuple):
+                        new_area = hull_result[0]
+                    else:
+                        new_area = hull_result
 
                     print(f"Bot przejął {len(taken_points)} punktów od innego gracza!")
+
+            # Ustaw przejęte punkty do wizualizacji
+            if all_captured_points:
+                self.captured_points = all_captured_points
+                self.captured_points_timer = 180  # 3 sekundy przy 60 FPS
 
             self.area = new_area
 
     def create_area_expansion(self):
         """Stwórz rozszerzony obszar z obecnego obszaru i śladu"""
-        # Połącz obszar i ślad
+        # Wygładź ślad przed dodaniem do obszaru
+        smoothed_trail = scenes.game.smooth_trail(self.trail)
+
+        # Dodaj punkty pośrednie do śladu dla gładszego obszaru
+        interpolated_trail = scenes.game.interpolate_points(smoothed_trail, density=8)
+
+        # Połącz obszar i wygładzony ślad
         all_points = []
         all_points.extend(self.area)
-        all_points.extend(self.trail)
+        all_points.extend(interpolated_trail)
 
         # Użyj smart_hull do stworzenia nowego obszaru
         if len(all_points) >= 3:
-            hull = scenes.game.smart_hull(all_points)
+            hull, triangles = scenes.game.smart_hull(all_points)
+            self.triangles = triangles  # Zapisz trójkąty do wizualizacji
             return self.clean_area(hull)
 
         return None
@@ -163,14 +202,14 @@ class PaperBot:
         if len(points) < 3:
             return points
 
-        # Usuń duplikaty
+        # Usuń duplikaty - mniejsza tolerancja dla gładszych obszarów
         cleaned = []
         for point in points:
-            if not cleaned or self.distance(point, cleaned[-1]) > 8:
+            if not cleaned or self.distance(point, cleaned[-1]) > 5:  # Zmniejszono z 8 do 5
                 cleaned.append(point)
 
         # Usuń punkt końcowy jeśli jest za blisko pierwszego
-        if len(cleaned) > 2 and self.distance(cleaned[0], cleaned[-1]) <= 8:
+        if len(cleaned) > 2 and self.distance(cleaned[0], cleaned[-1]) <= 5:  # Zmniejszono z 8 do 5
             cleaned.pop()
 
         # Jeśli zbyt mało punktów, zwróć oryginalny obszar
@@ -200,9 +239,39 @@ class PaperBot:
             pygame.draw.polygon(screen, light_color, self.area)
             pygame.draw.polygon(screen, dark_color, self.area, 2)
 
-        # Ślad w kolorze czerwonym (pozostaje bez zmian)
+        # NOWE: Rysuj trójkąty triangulacji
+        if constants.USE_TRIANGULATION and self.triangles:
+            for triangle in self.triangles:
+                # Rysuj krawędzie trójkąta w kolorze gracza
+                triangle_color = (
+                    max(0, self.color[0] - 100),
+                    max(0, self.color[1] - 100),
+                    max(0, self.color[2] - 100)
+                )
+                # Konwertuj na int dla pygame
+                int_triangle = [(int(p[0]), int(p[1])) for p in triangle]
+                pygame.draw.polygon(screen, triangle_color, int_triangle, 2)
+
+                # Rysuj wierzchołki jako małe kółka
+                for point in triangle:
+                    pygame.draw.circle(screen, triangle_color, (int(point[0]), int(point[1])), 3)
+
+        # NOWE: Rysuj przejęte punkty na czerwono
+        if self.captured_points and self.captured_points_timer > 0:
+            for point in self.captured_points:
+                # Rysuj czerwony punkt z efektem pulsowania
+                pulse_size = 3 + int(2 * abs(math.sin(self.captured_points_timer * 0.3)))
+                pygame.draw.circle(screen, (255, 0, 0), (int(point[0]), int(point[1])), pulse_size)
+                # Dodaj białe obramowanie dla lepszej widoczności
+                pygame.draw.circle(screen, (255, 255, 255), (int(point[0]), int(point[1])), pulse_size + 1, 1)
+
+        # NOWE: Wygładź ślad przed rysowaniem
         if len(self.trail) > 1:
-            pygame.draw.lines(screen, (255, 0, 0), False, self.trail, 3)
+            smoothed_trail = scenes.game.smooth_trail_for_drawing(self.trail)
+            if len(smoothed_trail) > 1:
+                # Konwertuj na int dla pygame
+                int_trail = [(int(p[0]), int(p[1])) for p in smoothed_trail]
+                pygame.draw.lines(screen, (255, 0, 0), False, int_trail, 3)
 
         # Rysuj bota w jego unikalnym kolorze
         pygame.draw.rect(
