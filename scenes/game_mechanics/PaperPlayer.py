@@ -9,8 +9,8 @@ class PaperPlayer:
     def __init__(self, x, y, color=(0, 0, 255), bot=None):
         self.x = x
         self.y = y
-        self.size = constants.SKIN_SIZE  # Rozmiar używany do kolizji i mechaniki gry
-        self.visual_size = constants.SKIN_SIZE * 2.5  # Rozmiar wizualny (możesz zmienić mnożnik)
+        self.size = constants.SKIN_SIZE
+        self.visual_size = constants.SKIN_SIZE * 2.5
         self.color = color
         self.direction = (1, 0)
         self.trail = []
@@ -19,17 +19,19 @@ class PaperPlayer:
         self.is_alive = True
         self.death_reason = ""
         self.bot = bot
-        self.just_finished_drawing = False  # NOWA FLAGA do sprawdzania przejęć
-        self.other_bots = []  # NOWE: Lista wszystkich botów
+        self.just_finished_drawing = False
+        self.other_bots = []
 
-        # NOWE: Przejęte punkty do wizualizacji
         self.captured_points = []
         self.captured_points_timer = 0
 
-        # NOWE: Trójkąty triangulacji do wizualizacji
         self.triangles = []
 
-        # Wczytaj wybrany skin
+        self.speed_boost_timer = 0
+        self.base_speed_multiplier = 1.0
+        self.speed_boost_multiplier = 2.0
+        self.speed_boost_duration = 300
+
         self.skin_image = None
         self.load_skin()
 
@@ -41,41 +43,57 @@ class PaperPlayer:
             (x - margin, y + margin)
         ]
 
+    def apply_speed_powerup(self):
+        self.speed_boost_timer = self.speed_boost_duration
+        try:
+            powerup_sound = pygame.mixer.Sound(constants.POWERUP_SOUND_PATH)
+            powerup_sound.set_volume(0.3)
+            powerup_sound.play()
+        except pygame.error:
+            pass
+
+    def get_current_speed_multiplier(self):
+        if self.speed_boost_timer > 0:
+            return self.speed_boost_multiplier
+        return self.base_speed_multiplier
+
+    def update_powerup_timers(self):
+        if self.speed_boost_timer > 0:
+            self.speed_boost_timer -= 1
+
     def update_captured_points_timer(self):
-        """Aktualizuj timer przejętych punktów"""
         if self.captured_points_timer > 0:
             self.captured_points_timer -= 1
             if self.captured_points_timer <= 0:
                 self.captured_points = []
 
     def load_skin(self):
-        """Wczytaj wybrany skin"""
         try:
             if constants.SELECTED_SKIN_INDEX < len(constants.SKIN_IMAGE_PATHS):
                 skin_path = constants.SKIN_IMAGE_PATHS[constants.SELECTED_SKIN_INDEX]
                 self.skin_image = pygame.image.load(skin_path).convert_alpha()
-                # Używamy visual_size zamiast size do skalowania skina
                 self.skin_image = pygame.transform.smoothscale(self.skin_image,
                                                                (int(self.visual_size), int(self.visual_size)))
         except (pygame.error, IndexError):
-            # Jeśli nie udało się wczytać skina, używaj domyślnego koloru
             self.skin_image = None
 
     def move(self, speed):
         if not self.is_alive:
             return
 
-        dx, dy = self.direction
-        new_x = self.x + dx * speed
-        new_y = self.y + dy * speed
+        self.update_powerup_timers()
 
-        # Granice planszy - nadal używamy self.size do kolizji z granicami
+        effective_speed = speed * self.get_current_speed_multiplier()
+
+        dx, dy = self.direction
+        new_x = self.x + dx * effective_speed
+        new_y = self.y + dy * effective_speed
+
         min_x = 50 + self.size // 2
         max_x = constants.SCREEN_WIDTH - 50 - self.size // 2
         min_y = 50 + self.size // 2
         max_y = constants.SCREEN_HEIGHT - 50 - self.size // 2
 
-        # Zatrzymaj się na granicy, niezależnie czy rysujesz czy nie
         if new_x < min_x or new_x > max_x or new_y < min_y or new_y > max_y:
             self.x = max(min_x, min(max_x, new_x))
             self.y = max(min_y, min(max_y, new_y))
@@ -85,58 +103,50 @@ class PaperPlayer:
         self.y = new_y
         current_pos = (self.x, self.y)
 
-        # Sprawdź kolizję ze śladem (tylko jeśli rysuje) - nadal używamy self.size
         if self.is_tracing and self.check_trail_collision(current_pos):
             self.die("Kolizja z własnym śladem")
             return
 
-        # Sprawdź, czy gracz jest w swoim obszarze
         if scenes.game.point_in_polygon(current_pos, self.area):
             if self.is_tracing and len(self.trail) > 3:
-                # Zamknij pętlę i powiększ obszar
                 self.update_area()
-                self.just_finished_drawing = True  # USTAW FLAGĘ
+                self.just_finished_drawing = True
             self.is_tracing = False
             self.trail = []
             self.trail_start_point = None
         else:
-            self.just_finished_drawing = False  # RESETUJ FLAGĘ gdy rysuje
+            self.just_finished_drawing = False
             if not self.is_tracing:
                 self.is_tracing = True
                 self.trail = []
                 self.trail_start_point = current_pos
 
-            # Dodaj punkt do śladu tylko jeśli jest wystarczająco daleko od ostatniego
-            if not self.trail or self.distance(current_pos, self.trail[-1]) > 3:
+            min_distance = 3 if self.speed_boost_timer == 0 else 2
+            if not self.trail or self.distance(current_pos, self.trail[-1]) > min_distance:
                 self.trail.append(current_pos)
 
     def check_trail_collision(self, current_pos):
-        """Sprawdź kolizję z własnym śladem - używa self.size do kolizji"""
-        if len(self.trail) < 10:  # Potrzebujemy więcej punktów przed sprawdzeniem kolizji
+        if len(self.trail) < 10:
             return False
 
-        # Sprawdź kolizję z odcinkami śladu (pomijając ostatnie 8 punktów żeby uniknąć fałszywych kolizji)
         for i in range(len(self.trail) - 8):
             if i + 1 < len(self.trail) - 8:
                 p1 = self.trail[i]
                 p2 = self.trail[i + 1]
 
-                # Sprawdź czy aktualny punkt jest blisko odcinka śladu - używamy self.size
                 dist = scenes.game.distance_point_to_segment(current_pos, p1, p2)
-                if dist < self.size // 2 + 3:  # Kolizja z małą tolerancją
+                if dist < self.size // 2 + 3:
                     return True
 
         return False
 
     def die(self, reason):
-        """Zabij gracza"""
         self.is_alive = False
         self.death_reason = reason
-        self.just_finished_drawing = False  # Resetuj flagę
-        print(f"Gracz zmarł: {reason}")
+        self.just_finished_drawing = False
+        self.speed_boost_timer = 0
 
     def reset(self):
-        """Resetuj gracza do stanu początkowego"""
         self.x = constants.SCREEN_WIDTH // 2
         self.y = constants.SCREEN_HEIGHT // 2
         self.is_alive = True
@@ -145,12 +155,12 @@ class PaperPlayer:
         self.is_tracing = False
         self.trail_start_point = None
         self.direction = (1, 0)
-        self.just_finished_drawing = False  # Resetuj flagę
+        self.just_finished_drawing = False
 
-        # Przeładuj skin (na wypadek gdyby się zmienił)
+        self.speed_boost_timer = 0
+
         self.load_skin()
 
-        # Resetuj obszar
         margin = 40
         self.area = [
             (self.x - margin, self.y - margin),
@@ -168,20 +178,16 @@ class PaperPlayer:
 
         new_area = self.create_simple_expansion()
         if new_area and len(new_area) >= 3:
-            # Przejmij obszary od wszystkich botów
             for bot in self.other_bots:
                 if not bot.is_alive:
                     continue
 
                 taken_points = [p for p in bot.area if scenes.game.point_in_polygon(p, new_area)]
                 if taken_points:
-                    # Usuń przejęte punkty z obszaru bota
                     bot.area = [p for p in bot.area if not scenes.game.point_in_polygon(p, new_area)]
 
-                    # Dodaj przejęte punkty do nowego obszaru
                     new_area += taken_points
 
-                    # Przebuduj obszar bota
                     if len(bot.area) >= 3:
                         hull_result = scenes.game.smart_hull(bot.area)
                         if isinstance(hull_result, tuple):
@@ -191,61 +197,48 @@ class PaperPlayer:
                     else:
                         bot.area = []
 
-                    # Przebuduj nasz obszar z przejętymi punktami
                     hull_result = scenes.game.smart_hull(new_area)
                     if isinstance(hull_result, tuple):
                         new_area = hull_result[0]
                     else:
                         new_area = hull_result
 
-                    print(f"Gracz przejął {len(taken_points)} punktów od bota!")
-
             self.area = new_area
 
     def create_simple_expansion(self):
-        """Prosta ekspansja - dodaj ślad do istniejącego obszaru"""
-        # Wygładź ślad przed dodaniem do obszaru
         smoothed_trail = scenes.game.smooth_trail(self.trail)
 
-        # Dodaj punkty pośrednie do śladu dla gładszego obszaru
         interpolated_trail = scenes.game.interpolate_points(smoothed_trail, density=8)
 
-        # Połącz obszar i wygładzony ślad
         all_points = []
         all_points.extend(self.area)
         all_points.extend(interpolated_trail)
 
-        # Użyj smart_hull zamiast convex_hull
         if len(all_points) >= 3:
             hull, triangles = scenes.game.smart_hull(all_points)
-            self.triangles = triangles  # Zapisz trójkąty do wizualizacji
+            self.triangles = triangles
             return self.clean_area(hull)
 
         return None
 
     def clean_area(self, points):
-        """Wyczyść obszar z duplikatów i niepotrzebnych punktów"""
         if len(points) < 3:
             return points
 
-        # Usuń duplikaty - mniejsza tolerancja dla gładszych obszarów
         cleaned = []
         for point in points:
-            if not cleaned or self.distance(point, cleaned[-1]) > 5:  # Zmniejszono z 8 do 5
+            if not cleaned or self.distance(point, cleaned[-1]) > 5:
                 cleaned.append(point)
 
-        # Usuń punkt końcowy jeśli jest za blisko pierwszego
-        if len(cleaned) > 2 and self.distance(cleaned[0], cleaned[-1]) <= 5:  # Zmniejszono z 8 do 5
+        if len(cleaned) > 2 and self.distance(cleaned[0], cleaned[-1]) <= 5:
             cleaned.pop()
 
-        # Jeśli zbyt mało punktów, zwróć oryginalny obszar
         if len(cleaned) < 3:
             return self.area
 
         return cleaned
 
     def calculate_polygon_area(self, points):
-        """Oblicz powierzchnię wielokąta"""
         if len(points) < 3:
             return 0
 
@@ -258,7 +251,6 @@ class PaperPlayer:
         return abs(area) / 2
 
     def calculate_centroid(self, points):
-        """Oblicz środek ciężkości wielokąta"""
         if not points:
             return (0, 0)
 
@@ -267,58 +259,77 @@ class PaperPlayer:
         return (x, y)
 
     def draw(self, screen):
-        # Rysuj obszar
         if len(self.area) > 2:
             if self.is_alive:
-                pygame.draw.polygon(screen, (200, 220, 255), self.area)
-                pygame.draw.polygon(screen, (0, 0, 200), self.area, 2)
+                if self.speed_boost_timer > 0:
+                    pulse = int(abs(math.sin(self.speed_boost_timer * 0.3)) * 50)
+                    area_color = (min(255, 200 + pulse // 2), min(255, 220 + pulse // 2), 255)
+                    border_color = (min(255, 0 + pulse), min(255, 0 + pulse), min(255, 200 + pulse))
+                else:
+                    area_color = (200, 220, 255)
+                    border_color = (0, 0, 200)
+
+                pygame.draw.polygon(screen, area_color, self.area)
+                pygame.draw.polygon(screen, border_color, self.area, 2)
             else:
-                # Jeśli gracz nie żyje, rysuj obszar w szarym kolorze
                 pygame.draw.polygon(screen, (150, 150, 150), self.area)
                 pygame.draw.polygon(screen, (100, 100, 100), self.area, 2)
 
-        # NOWE: Rysuj trójkąty triangulacji
         if constants.USE_TRIANGULATION and self.triangles:
             for triangle in self.triangles:
-                # Rysuj krawędzie trójkąta w kolorze gracza
                 triangle_color = (0, 0, 150) if self.is_alive else (80, 80, 80)
-                # Konwertuj na int dla pygame
                 int_triangle = [(int(p[0]), int(p[1])) for p in triangle]
                 pygame.draw.polygon(screen, triangle_color, int_triangle, 2)
 
-                # Rysuj wierzchołki jako małe kółka
                 for point in triangle:
                     pygame.draw.circle(screen, triangle_color, (int(point[0]), int(point[1])), 3)
 
-        # NOWE: Rysuj przejęte punkty na czerwono
         if self.captured_points and self.captured_points_timer > 0:
             for point in self.captured_points:
-                # Rysuj czerwony punkt z efektem pulsowania
                 pulse_size = 3 + int(2 * abs(math.sin(self.captured_points_timer * 0.3)))
                 pygame.draw.circle(screen, (255, 0, 0), (int(point[0]), int(point[1])), pulse_size)
-                # Dodaj białe obramowanie dla lepszej widoczności
                 pygame.draw.circle(screen, (255, 255, 255), (int(point[0]), int(point[1])), pulse_size + 1, 1)
 
-        # Rysuj ślad - NOWE: z wygładzaniem
         if len(self.trail) > 1:
             smoothed_trail = scenes.game.smooth_trail_for_drawing(self.trail)
             if len(smoothed_trail) > 1:
-                # Konwertuj na int dla pygame
                 int_trail = [(int(p[0]), int(p[1])) for p in smoothed_trail]
                 if self.is_alive:
-                    pygame.draw.lines(screen, (255, 0, 0), False, int_trail, 3)
+                    if self.speed_boost_timer > 0:
+                        trail_color = (255, 100, 100)
+                        trail_width = 5
+                    else:
+                        trail_color = (255, 0, 0)
+                        trail_width = 3
+                    pygame.draw.lines(screen, trail_color, False, int_trail, trail_width)
                 else:
-                    # Jeśli gracz nie żyje, rysuj ślad w ciemniejszym kolorze
                     pygame.draw.lines(screen, (150, 0, 0), False, int_trail, 3)
 
-        # Rysuj gracza - użyj visual_size dla wyświetlania
         if self.skin_image and self.is_alive:
-            # Wycentruj skin - skin już ma odpowiedni rozmiar dzięki load_skin()
             skin_rect = self.skin_image.get_rect(center=(self.x, self.y))
+
+            if self.speed_boost_timer > 0:
+                pulse = int(abs(math.sin(self.speed_boost_timer * 0.5)) * 10)
+                glow_size = self.visual_size // 2 + pulse + 10
+                glow_color = (255, 255, 0, 100)
+
+                for i in range(3):
+                    glow_radius = glow_size - i * 3
+                    glow_surface = pygame.Surface((glow_radius * 2, glow_radius * 2))
+                    glow_surface.set_alpha(50 - i * 15)
+                    glow_surface.fill((255, 255, 0))
+                    glow_rect = glow_surface.get_rect(center=(self.x, self.y))
+
             screen.blit(self.skin_image, skin_rect)
         else:
-            # Domyślny kwadrat (gdy nie ma skina lub gracz nie żyje) - używamy visual_size
             player_color = self.color if self.is_alive else (100, 100, 100)
+
+            if self.is_alive and self.speed_boost_timer > 0:
+                pulse = int(abs(math.sin(self.speed_boost_timer * 0.3)) * 50)
+                player_color = (min(255, player_color[0] + pulse),
+                                min(255, player_color[1] + pulse),
+                                player_color[2])
+
             pygame.draw.rect(
                 screen,
                 player_color,

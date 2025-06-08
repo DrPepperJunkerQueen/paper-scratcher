@@ -10,15 +10,12 @@ pygame.display.set_caption("Paper Scratcher")
 
 clock = pygame.time.Clock()
 
-# Sceny
 splash = SplashScreen(screen)
 menu = MainMenu(screen)
 game = GameScene(screen)
 
-# Stan początkowy
 current_scene = splash
 
-# Główna pętla
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -29,7 +26,6 @@ while True:
     current_scene.update()
     current_scene.draw()
 
-    # Sprawdź, czy scena się zmieniła
     if current_scene.next_scene:
         current_scene = current_scene.next_scene
 

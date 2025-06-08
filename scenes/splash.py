@@ -11,14 +11,13 @@ class SplashScreen:
         self.fade_in = True
         self.timer = pygame.time.get_ticks()
 
-        # Wczytaj i odtwórz dźwięk
         pygame.mixer.init()
         self.sound = pygame.mixer.Sound(constants.SPLASH_SOUND_PATH)
         self.sound.set_volume(0.05)
         self.sound.play()
 
     def handle_event(self, event):
-        pass  # Splash screen nie reaguje na kliknięcia
+        pass
 
     def update(self):
         now = pygame.time.get_ticks()
@@ -29,9 +28,9 @@ class SplashScreen:
             if self.alpha >= 255:
                 self.alpha = 255
                 self.fade_in = False
-                self.timer = now  # resetuj timer
+                self.timer = now
         else:
-            if elapsed > 2000:  # zacznij fade out po 1s
+            if elapsed > 2000:
                 self.alpha -= 5
                 if self.alpha <= 0:
                     self.alpha = 0

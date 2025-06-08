@@ -8,7 +8,6 @@ class MainMenu:
         self.button_font = pygame.font.SysFont("Comic Sans MS", 36)
         self.next_scene = None
 
-        # Przyciski (etykieta, prostokąt)
         self.buttons = []
         button_labels = ["Start", "Skins", "Profile", "Settings"]
         button_width = 200
@@ -37,7 +36,6 @@ class MainMenu:
                         from scenes.settings import SettingsScene
                         self.next_scene = SettingsScene(self.screen)
                     else:
-                        # Domyślnie do gry – możesz to zmienić na sceny Profilu
                         from scenes.game import GameScene
                         self.next_scene = GameScene(self.screen)
 
@@ -47,11 +45,9 @@ class MainMenu:
     def draw(self):
         self.screen.fill((0, 0, 0))
 
-        # Tytuł gry
         title_text = self.title_font.render("PaperScratcher", True, (0, 255, 0))
         self.screen.blit(title_text, ((constants.SCREEN_WIDTH - title_text.get_width()) / 2, 100))
 
-        # Przyciski
         for label, rect in self.buttons:
             pygame.draw.rect(self.screen, (0, 255, 0), rect)
             text = self.button_font.render(label, True, (0, 0, 0))

@@ -4,26 +4,22 @@ import math
 import random
 from scenes.game_mechanics.PaperBot import PaperBot
 from scenes.game_mechanics.PaperPlayer import PaperPlayer
+from scenes.game_mechanics.PowerUp import PowerUpManager
 
 
 def convex_hull(points):
-    """Algoritm Grahama dla otoczki wypukłej"""
     if len(points) < 3:
         return points
 
-    # Znajdź punkt o najniższej współrzędnej y (i najniższej x w przypadku remisu)
     start = min(points, key=lambda p: (p[1], p[0]))
 
-    # Sortuj punkty według kąta polarnego względem punktu startowego
     def polar_angle(p):
         return math.atan2(p[1] - start[1], p[0] - start[0])
 
     sorted_points = sorted([p for p in points if p != start], key=polar_angle)
 
-    # Buduj otoczkę wypukłą
     hull = [start]
     for point in sorted_points:
-        # Usuń punkty, które tworzą zakręt w prawo
         while len(hull) > 1 and cross_product(hull[-2], hull[-1], point) <= 0:
             hull.pop()
         hull.append(point)
@@ -32,16 +28,13 @@ def convex_hull(points):
 
 
 def concave_hull_simple(points, max_edge_length=50):
-    """Prosta implementacja concave hull - usuwa długie krawędzie z convex hull"""
     if len(points) < 3:
         return points
 
-    # Najpierw stwórz convex hull
     convex = convex_hull(points)
     if len(convex) < 3:
         return convex
 
-    # Znajdź wszystkie punkty wewnątrz convex hull
     inner_points = []
     for point in points:
         if point not in convex:
@@ -50,7 +43,6 @@ def concave_hull_simple(points, max_edge_length=50):
     if not inner_points:
         return convex
 
-    # Sprawdź każdą krawędź convex hull
     concave_points = []
     for i in range(len(convex)):
         current_point = convex[i]
@@ -58,22 +50,17 @@ def concave_hull_simple(points, max_edge_length=50):
 
         concave_points.append(current_point)
 
-        # Oblicz długość krawędzi
         edge_length = distance_between_points(current_point, next_point)
 
-        # Jeśli krawędź jest długa, spróbuj znaleźć punkty pośrednie
         if edge_length > max_edge_length:
-            # Znajdź punkty wewnętrzne które są blisko tej krawędzi
             edge_points = []
             for inner_point in inner_points:
                 dist_to_edge = distance_point_to_segment(inner_point, current_point, next_point)
                 if dist_to_edge < max_edge_length * 0.3:
                     edge_points.append(inner_point)
 
-            # Sortuj punkty wzdłuż krawędzi
             if edge_points:
                 def distance_along_edge(p):
-                    # Projekcja punktu na krawędź
                     dx = next_point[0] - current_point[0]
                     dy = next_point[1] - current_point[1]
                     if dx == 0 and dy == 0:
@@ -88,35 +75,30 @@ def concave_hull_simple(points, max_edge_length=50):
 
 
 def concave_hull_alpha_shapes(points, alpha=None):
-    """Ulepszona implementacja concave hull używając prostej metody"""
     if alpha is None:
         alpha = constants.CONCAVE_ALPHA
 
-    # Przekonwertuj alpha na max_edge_length
-    max_edge_length = 100.0 / alpha  # Im mniejszy alpha, tym mniejsze dozwolone krawędzie
+    max_edge_length = 100.0 / alpha
 
     return concave_hull_simple(points, max_edge_length)
 
 
 def smooth_trail_for_drawing(trail, smoothing_factor=2):
-    """Wygładź ślad do rysowania (mniej agresywne niż dla obszarów)"""
     if len(trail) < smoothing_factor * 2 or not constants.AREA_SMOOTHING:
         return trail
 
     smoothed = []
     for i in range(len(trail)):
         if i < smoothing_factor or i >= len(trail) - smoothing_factor:
-            # Zachowaj punkty na końcach bez zmian
             smoothed.append(trail[i])
         else:
-            # Lekkie uśrednianie z sąsiadującymi punktami
             sum_x = 0
             sum_y = 0
             count = 0
 
             for j in range(-smoothing_factor, smoothing_factor + 1):
                 if 0 <= i + j < len(trail):
-                    weight = 1.0 - abs(j) * 0.3  # Mniejsza waga dla dalszych punktów
+                    weight = 1.0 - abs(j) * 0.3
                     sum_x += trail[i + j][0] * weight
                     sum_y += trail[i + j][1] * weight
                     count += weight
@@ -130,11 +112,9 @@ def smooth_trail_for_drawing(trail, smoothing_factor=2):
 
 
 def delaunay_triangulation_simple(points):
-    """Prosta implementacja triangulacji Delaunay"""
     if len(points) < 3:
         return []
 
-    # Usuń duplikaty punktów
     unique_points = []
     for point in points:
         is_duplicate = False
@@ -151,17 +131,14 @@ def delaunay_triangulation_simple(points):
     triangles = []
     n = len(unique_points)
 
-    # Dla każdej kombinacji 3 punktów
     for i in range(n):
         for j in range(i + 1, n):
             for k in range(j + 1, n):
                 p1, p2, p3 = unique_points[i], unique_points[j], unique_points[k]
 
-                # Sprawdź czy trójkąt nie jest zdegenerowany
                 if abs(cross_product(p1, p2, p3)) < 1e-10:
                     continue
 
-                # Sprawdź czy żaden inny punkt nie jest wewnątrz okręgu opisanego
                 is_delaunay = True
                 circumcenter = calculate_circumcenter(p1, p2, p3)
                 circumradius_sq = distance_between_points(circumcenter, p1) ** 2
@@ -173,7 +150,7 @@ def delaunay_triangulation_simple(points):
                     test_point = unique_points[l]
                     dist_sq = distance_between_points(circumcenter, test_point) ** 2
 
-                    if dist_sq < circumradius_sq - 1e-10:  # Punkt wewnątrz okręgu
+                    if dist_sq < circumradius_sq - 1e-10:
                         is_delaunay = False
                         break
 
@@ -184,14 +161,12 @@ def delaunay_triangulation_simple(points):
 
 
 def calculate_circumcenter(p1, p2, p3):
-    """Oblicz środek okręgu opisanego na trójkącie"""
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
 
     denom = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
     if abs(denom) < 1e-10:
-        # Punkty współliniowe
         return ((x1 + x2 + x3) / 3, (y1 + y2 + y3) / 3)
 
     ux = ((x1 * x1 + y1 * y1) * (y2 - y3) + (x2 * x2 + y2 * y2) * (y3 - y1) + (x3 * x3 + y3 * y3) * (y1 - y2)) / denom
@@ -201,44 +176,35 @@ def calculate_circumcenter(p1, p2, p3):
 
 
 def triangulated_hull(points):
-    """Stwórz obszar z triangulacji gdzie każdy trójkąt ma swoją mini-otoczkę"""
     if len(points) < 3:
-        return points, []  # Zwróć też pustą listę trójkątów
+        return points, []
 
-    # Stwórz triangulację
     triangles = delaunay_triangulation_simple(points)
     if not triangles:
         return convex_hull(points), []
 
-    # Dla każdego trójkąta stwórz mini-otoczkę z rozszerzeniem
     all_hull_points = []
-    expansion_radius = 8  # Promień rozszerzenia każdego trójkąta
+    expansion_radius = 8
 
     for triangle in triangles:
-        # Znajdź środek trójkąta
         center_x = sum(p[0] for p in triangle) / 3
         center_y = sum(p[1] for p in triangle) / 3
         center = (center_x, center_y)
 
-        # Dla każdego wierzchołka trójkąta stwórz punkty w okręgu
         triangle_hull = []
         for point in triangle:
-            # Dodaj oryginalny punkt
             triangle_hull.append(point)
 
-            # Dodaj punkty w okręgu wokół każdego wierzchołka
-            for angle in range(0, 360, 45):  # Co 45 stopni
+            for angle in range(0, 360, 45):
                 rad = math.radians(angle)
                 expanded_x = point[0] + expansion_radius * math.cos(rad)
                 expanded_y = point[1] + expansion_radius * math.sin(rad)
                 triangle_hull.append((expanded_x, expanded_y))
 
-        # Stwórz mini-otoczkę dla tego trójkąta
         if len(triangle_hull) >= 3:
             mini_hull = convex_hull(triangle_hull)
             all_hull_points.extend(mini_hull)
 
-    # Usuń duplikaty i stwórz finalną otoczkę
     unique_hull_points = []
     for point in all_hull_points:
         is_duplicate = False
@@ -250,11 +216,10 @@ def triangulated_hull(points):
             unique_hull_points.append(point)
 
     final_hull = convex_hull(unique_hull_points) if len(unique_hull_points) >= 3 else convex_hull(points)
-    return final_hull, triangles  # Zwróć både hull i trójkąty
+    return final_hull, triangles
 
 
 def smart_hull(points):
-    """Wybierz odpowiednią metodę otoczki na podstawie ustawień"""
     if constants.USE_TRIANGULATION:
         hull, triangles = triangulated_hull(points)
         return hull, triangles
@@ -265,7 +230,6 @@ def smart_hull(points):
 
 
 def interpolate_points(points, density=5):
-    """Dodaj punkty pośrednie między istniejącymi punktami dla gładszego obszaru"""
     if len(points) < 2 or not constants.AREA_SMOOTHING:
         return points
 
@@ -274,15 +238,12 @@ def interpolate_points(points, density=5):
         current_point = points[i]
         next_point = points[(i + 1) % len(points)]
 
-        # Dodaj aktualny punkt
         interpolated.append(current_point)
 
-        # Oblicz odległość między punktami
         dx = next_point[0] - current_point[0]
         dy = next_point[1] - current_point[1]
         distance = math.sqrt(dx * dx + dy * dy)
 
-        # Dodaj punkty pośrednie tylko jeśli odległość jest wystarczająco duża
         if distance > density * 2:
             num_interpolated = int(distance // density)
             for j in range(1, num_interpolated):
@@ -295,61 +256,14 @@ def interpolate_points(points, density=5):
 
 
 def smooth_trail(trail, smoothing_factor=3):
-    """Wygładź ślad przez uśrednianie sąsiadujących punktów"""
     if len(trail) < smoothing_factor * 2 or not constants.AREA_SMOOTHING:
         return trail
 
     smoothed = []
     for i in range(len(trail)):
         if i < smoothing_factor or i >= len(trail) - smoothing_factor:
-            # Zachowaj punkty na końcach bez zmian
             smoothed.append(trail[i])
         else:
-            # Uśrednij z sąsiadującymi punktami
-            sum_x = 0
-            sum_y = 0
-            count = 0
-
-            for j in range(-smoothing_factor, smoothing_factor + 1):
-                if 0 <= i + j < len(trail):
-                    sum_x += trail[i + j][0]
-                    sum_y += trail[i + j][1]
-                    count += 1
-
-            if count > 0:
-                smoothed.append((sum_x / count, sum_y / count))
-            else:
-                smoothed.append(trail[i])
-
-    return smoothed[0]
-    dy = next_point[1] - current_point[1]
-    distance = math.sqrt(dx * dx + dy * dy)
-
-    # Dodaj punkty pośrednie tylko jeśli odległość jest wystarczająco duża
-    if distance > density * 2:
-        num_interpolated = int(distance // density)
-        for j in range(1, num_interpolated):
-            t = j / num_interpolated
-            interp_x = current_point[0] + t * dx
-            interp_y = current_point[1] + t * dy
-            interpolated.append((interp_x, interp_y))
-
-
-    return interpolated
-
-
-def smooth_trail(trail, smoothing_factor=3):
-    """Wygładź ślad przez uśrednianie sąsiadujących punktów"""
-    if len(trail) < smoothing_factor * 2:
-        return trail
-
-    smoothed = []
-    for i in range(len(trail)):
-        if i < smoothing_factor or i >= len(trail) - smoothing_factor:
-            # Zachowaj punkty na końcach bez zmian
-            smoothed.append(trail[i])
-        else:
-            # Uśrednij z sąsiadującymi punktami
             sum_x = 0
             sum_y = 0
             count = 0
@@ -369,12 +283,10 @@ def smooth_trail(trail, smoothing_factor=3):
 
 
 def cross_product(o, a, b):
-    """Iloczyn wektorowy dla trzech punktów"""
     return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 
 
 def point_in_polygon(point, polygon):
-    """Sprawdź czy punkt jest wewnątrz wielokąta używając ray casting"""
     x, y = point
     n = len(polygon)
     inside = False
@@ -395,14 +307,12 @@ def point_in_polygon(point, polygon):
 
 
 def find_area_intersection(area, trail_start, trail_end):
-    """Znajdź punkty przecięcia śladu z obszarem"""
     intersections = []
 
     for i in range(len(area)):
         p1 = area[i]
         p2 = area[(i + 1) % len(area)]
 
-        # Sprawdź przecięcie odcinka area z punktem wyjścia/wejścia
         if point_on_segment(p1, p2, trail_start):
             intersections.append((i, trail_start))
         if point_on_segment(p1, p2, trail_end):
@@ -412,14 +322,11 @@ def find_area_intersection(area, trail_start, trail_end):
 
 
 def point_on_segment(p1, p2, point, tolerance=5):
-    """Sprawdź czy punkt leży na odcinku z tolerancją"""
-    # Sprawdź czy punkt jest blisko odcinka
     dist = distance_point_to_segment(point, p1, p2)
     return dist <= tolerance
 
 
 def distance_point_to_segment(point, seg_start, seg_end):
-    """Odległość punktu od odcinka"""
     px, py = point
     x1, y1 = seg_start
     x2, y2 = seg_end
@@ -451,14 +358,11 @@ def distance_point_to_segment(point, seg_start, seg_end):
 
 
 def polygon_union(poly1, poly2):
-    """Połącz dwa wielokąty w jeden (uproszczona wersja)"""
     if len(poly1) < 3 or len(poly2) < 3:
         return poly1 if len(poly1) >= 3 else poly2
 
-    # Znajdź wszystkie punkty z obu wielokątów
     all_points = list(poly1) + list(poly2)
 
-    # Dodaj punkty przecięć krawędzi
     intersection_points = []
     for i in range(len(poly1)):
         edge1_start = poly1[i]
@@ -474,14 +378,12 @@ def polygon_union(poly1, poly2):
 
     all_points.extend(intersection_points)
 
-    # Znajdź punkty które są na brzegu lub wewnątrz któregokolwiek wielokąta
     union_points = []
     for point in all_points:
         if (point_in_polygon(point, poly1) or point_in_polygon(point, poly2) or
                 point_on_polygon_edge(point, poly1) or point_on_polygon_edge(point, poly2)):
             union_points.append(point)
 
-    # Usuń duplikaty
     unique_points = []
     for point in union_points:
         is_duplicate = False
@@ -499,17 +401,14 @@ def polygon_union(poly1, poly2):
 
 
 def polygon_difference(main_poly, subtract_poly):
-    """Odejmij jeden wielokąt od drugiego"""
     if len(main_poly) < 3 or len(subtract_poly) < 3:
         return main_poly
 
-    # Znajdź punkty głównego wielokąta które NIE są wewnątrz odejmowanego
     remaining_points = []
     for point in main_poly:
         if not point_in_polygon(point, subtract_poly):
             remaining_points.append(point)
 
-    # Dodaj punkty przecięć krawędzi
     intersection_points = []
     for i in range(len(main_poly)):
         edge1_start = main_poly[i]
@@ -521,13 +420,11 @@ def polygon_difference(main_poly, subtract_poly):
 
             intersection = line_intersection(edge1_start, edge1_end, edge2_start, edge2_end)
             if intersection:
-                # Sprawdź czy punkt przecięcia leży na krawędzi głównego wielokąta
                 if point_on_segment(edge1_start, edge1_end, intersection, tolerance=5):
                     intersection_points.append(intersection)
 
     remaining_points.extend(intersection_points)
 
-    # Usuń duplikaty
     unique_points = []
     for point in remaining_points:
         is_duplicate = False
@@ -545,7 +442,6 @@ def polygon_difference(main_poly, subtract_poly):
 
 
 def line_intersection(p1, p2, p3, p4):
-    """Znajdź przecięcie dwóch linii (odcinków)"""
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
@@ -558,7 +454,6 @@ def line_intersection(p1, p2, p3, p4):
     t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
     u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom
 
-    # Sprawdź czy przecięcie jest na obu odcinkach
     if 0 <= t <= 1 and 0 <= u <= 1:
         return (x1 + t * (x2 - x1), y1 + t * (y2 - y1))
 
@@ -566,7 +461,6 @@ def line_intersection(p1, p2, p3, p4):
 
 
 def point_on_polygon_edge(point, polygon, tolerance=5):
-    """Sprawdź czy punkt leży na brzegu wielokąta"""
     for i in range(len(polygon)):
         edge_start = polygon[i]
         edge_end = polygon[(i + 1) % len(polygon)]
@@ -576,25 +470,20 @@ def point_on_polygon_edge(point, polygon, tolerance=5):
 
 
 def distance_between_points(p1, p2):
-    """Odległość między dwoma punktami"""
     return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
 def calculate_territory_capture(winner_area, winner_trail, loser_area):
-    """Oblicz jak przejąć teren po kolizji"""
     if len(winner_trail) < 3:
         return winner_area, loser_area
 
-    # Stwórz nowy obszar z śladu zwycięzcy
     new_captured_area = smart_hull(winner_area + winner_trail)
 
     if len(new_captured_area) < 3:
         return winner_area, loser_area
 
-    # Połącz nowy obszar z istniejącym obszarem zwycięzcy
     combined_winner_area = polygon_union(winner_area, new_captured_area)
 
-    # Odejmij przejęty teren od przegrywającego
     remaining_loser_area = polygon_difference(loser_area, new_captured_area)
 
     return combined_winner_area, remaining_loser_area
@@ -606,14 +495,14 @@ class GameScene:
         self.font = pygame.font.SysFont("arial", 24)
         self.big_font = pygame.font.SysFont("arial", 48)
         self.next_scene = None
-        self.bot = PaperBot(100, 100, color=(255, 100, 0))  # Pomarańczowy
+        self.bot = PaperBot(100, 100, color=(255, 100, 0))
         self.bot2 = PaperBot(constants.SCREEN_WIDTH - 100, constants.SCREEN_HEIGHT - 100,
-                             color=(100, 255, 0))  # Zielony
-        self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100, color=(0, 255, 100))  # Cyjan
-        # Gracz będzie teraz używał wybranego skina
+                             color=(100, 255, 0))
+        self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100, color=(0, 255, 100))
         self.player = PaperPlayer(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2, bot=self.bot)
 
-        # NOWE: Ustaw referencje do wszystkich innych graczy dla każdego bota
+        self.powerup_manager = PowerUpManager()
+
         self.setup_player_references()
         self.speed = 2
         self.game_over_timer = 0
@@ -621,17 +510,9 @@ class GameScene:
         self.win_ratio = 0.8
 
     def setup_player_references(self):
-        """Ustaw referencje między wszystkimi graczami dla logiki przejmowania obszarów"""
-        # Bot 1 może przejmować od gracza, bot2 i bot3
         self.bot.set_other_players([self.player, self.bot2, self.bot3])
-
-        # Bot 2 może przejmować od gracza, bot1 i bot3
         self.bot2.set_other_players([self.player, self.bot, self.bot3])
-
-        # Bot 3 może przejmować od gracza, bot1 i bot2
         self.bot3.set_other_players([self.player, self.bot, self.bot2])
-
-        # Gracz już ma referencję do bot1, dodaj pozostałe
         self.player.other_bots = [self.bot, self.bot2, self.bot3]
 
     def handle_event(self, event):
@@ -641,16 +522,15 @@ class GameScene:
                 self.next_scene = MainMenu(self.screen)
             elif event.key == pygame.K_r and (
                     not self.player.is_alive or not self.bot.is_alive or not self.bot2.is_alive or not self.bot3.is_alive):
-                # Resetuj gra z zachowaniem wybranego skina
-                self.bot = PaperBot(100, 100, color=(255, 100, 0))  # Pomarańczowy
+                self.bot = PaperBot(100, 100, color=(255, 100, 0))
                 self.bot2 = PaperBot(constants.SCREEN_WIDTH - 100, constants.SCREEN_HEIGHT - 100,
-                                     color=(100, 255, 0))  # Zielony
-                self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100, color=(0, 255, 100))  # Cyjan
+                                     color=(100, 255, 0))
+                self.bot3 = PaperBot(100, constants.SCREEN_HEIGHT - 100, color=(0, 255, 100))
                 self.player = PaperPlayer(constants.SCREEN_WIDTH // 2, constants.SCREEN_HEIGHT // 2, bot=self.bot)
-                self.setup_player_references()  # NOWE: Ustaw referencje po resecie
+                self.setup_player_references()
+                self.powerup_manager.clear_all()
                 self.game_over_timer = 0
             elif self.player.is_alive:
-                # Sterowanie tylko gdy gracz żyje
                 if event.key == pygame.K_LEFT:
                     self.player.direction = (-1, 0)
                 elif event.key == pygame.K_RIGHT:
@@ -660,251 +540,125 @@ class GameScene:
                 elif event.key == pygame.K_DOWN:
                     self.player.direction = (0, 1)
 
-    # Dodaj tę metodę do klasy GameScene w game.py
-
-    def debug_collision_check(self):
-        """Debug - sprawdź stan wszystkich obiektów"""
-        print("=== DEBUG KOLIZJI ===")
-        print(
-            f"Gracz: pozycja=({self.player.x}, {self.player.y}), is_tracing={self.player.is_tracing}, trail_len={len(self.player.trail)}, area_len={len(self.player.area)}")
-        print(
-            f"Bot1: pozycja=({self.bot.x}, {self.bot.y}), is_tracing={self.bot.is_tracing}, trail_len={len(self.bot.trail)}, area_len={len(self.bot.area)}")
-        print(
-            f"Bot2: pozycja=({self.bot2.x}, {self.bot2.y}), is_tracing={self.bot2.is_tracing}, trail_len={len(self.bot2.trail)}, area_len={len(self.bot2.area)}")
-        print(
-            f"Bot3: pozycja=({self.bot3.x}, {self.bot3.y}), is_tracing={self.bot3.is_tracing}, trail_len={len(self.bot3.trail)}, area_len={len(self.bot3.area)}")
-
-        # Sprawdź czy gracz jest w obszarze któregoś bota
-        player_pos = (self.player.x, self.player.y)
-        print(f"Gracz w obszarze bot1: {point_in_polygon(player_pos, self.bot.area)}")
-        print(f"Gracz w obszarze bot2: {point_in_polygon(player_pos, self.bot2.area)}")
-        print(f"Gracz w obszarze bot3: {point_in_polygon(player_pos, self.bot3.area)}")
-
-        # Sprawdź czy któryś bot jest w obszarze gracza
-        bot1_pos = (self.bot.x, self.bot.y)
-        bot2_pos = (self.bot2.x, self.bot2.y)
-        bot3_pos = (self.bot3.x, self.bot3.y)
-        print(f"Bot1 w obszarze gracza: {point_in_polygon(bot1_pos, self.player.area)}")
-        print(f"Bot2 w obszarze gracza: {point_in_polygon(bot2_pos, self.player.area)}")
-        print(f"Bot3 w obszarze gracza: {point_in_polygon(bot3_pos, self.player.area)}")
-        print("===================")
-
-    def check_territory_invasion(self):
-        """Sprawdź czy ktoś rysuje w obszarze wroga i przejmij teren gdy wraca"""
-
-        # Sprawdź czy gracz kończy rysowanie w obszarze któregoś bota
-        if self.player.is_alive and not self.player.is_tracing and len(self.player.trail) == 0:
-            # Gracz właśnie skończył rysować - sprawdź czy przejął jakiś teren
-            player_pos = (self.player.x, self.player.y)
-
-            # Sprawdź każdego bota
-            for bot_name, bot in [("Bot1", self.bot), ("Bot2", self.bot2), ("Bot3", self.bot3)]:
-                if not bot.is_alive:
-                    continue
-
-                # Sprawdź czy nowy obszar gracza nachodzi na obszar bota
-                if len(self.player.area) > 2 and len(bot.area) > 2:
-                    captured_area = self.find_overlapping_area(self.player.area, bot.area)
-                    if captured_area and len(captured_area) > 2:
-                        print(f"!!! PRZEJĘCIE TERENU: Gracz przejął teren od {bot_name} !!!")
-
-                        # Usuń przejęty teren z bota
-                        bot.area = self.remove_overlapping_area(bot.area, self.player.area)
-
-                        # Sprawdź czy bot stracił cały teren
-                        if len(bot.area) < 3:
-                            bot.die(f"Stracił cały teren na rzecz gracza")
-
-        # Sprawdź czy któryś bot kończy rysowanie w obszarze gracza
-        for bot_name, bot in [("Bot1", self.bot), ("Bot2", self.bot2), ("Bot3", self.bot3)]:
-            if not bot.is_alive or bot.is_tracing or len(bot.trail) > 0:
-                continue
-
-            # Bot właśnie skończył rysować
-            if len(bot.area) > 2 and len(self.player.area) > 2:
-                captured_area = self.find_overlapping_area(bot.area, self.player.area)
-                if captured_area and len(captured_area) > 2:
-                    print(f"!!! PRZEJĘCIE TERENU: {bot_name} przejął teren od gracza !!!")
-
-                    # Usuń przejęty teren z gracza
-                    self.player.area = self.remove_overlapping_area(self.player.area, bot.area)
-
-                    # Sprawdź czy gracz stracił cały teren
-                    if len(self.player.area) < 3:
-                        self.player.die(f"{bot_name} przejął cały twój teren")
-
-    # Dodaj te nowe metody do klasy GameScene w game.py (przed metodą update):
-
-    def find_overlapping_area(self, area1, area2):
-        """Znajdź nachodzącą się część dwóch obszarów"""
-        overlapping_points = []
-
-        # Znajdź punkty z area1 które są w area2
-        for point in area1:
-            if point_in_polygon(point, area2):
-                overlapping_points.append(point)
-
-        # Znajdź punkty z area2 które są w area1
-        for point in area2:
-            if point_in_polygon(point, area1):
-                overlapping_points.append(point)
-
-        # Usuń duplikaty
-        unique_points = []
-        for point in overlapping_points:
-            is_duplicate = False
-            for existing in unique_points:
-                if abs(point[0] - existing[0]) < 5 and abs(point[1] - existing[1]) < 5:
-                    is_duplicate = True
-                    break
-            if not is_duplicate:
-                unique_points.append(point)
-
-        return unique_points if len(unique_points) >= 3 else []
-
-    def remove_overlapping_area(self, main_area, overlapping_area):
-        """Usuń nachodzącą się część z głównego obszaru"""
-        remaining_points = []
-
-        # Zachowaj tylko punkty które NIE są w nachodzącym obszarze
-        for point in main_area:
-            if not point_in_polygon(point, overlapping_area):
-                remaining_points.append(point)
-
-        if len(remaining_points) >= 3:
-            return smart_hull(remaining_points)
-        else:
-            return []
-
-    # Zastąp metodę check_area_expansion() w game.py tym kodem:
-
     def check_area_expansion(self):
-        """Sprawdź czy ktoś właśnie rozszerzył swój obszar i przejmij terytoria wrogów"""
-
-        # 1. Gdy gracz wraca do swojego obszaru po rysowaniu
         if (self.player.is_alive and not self.player.is_tracing and
                 hasattr(self.player, 'just_finished_drawing') and self.player.just_finished_drawing):
 
             self.player.just_finished_drawing = False
-            print("!!! Gracz skończył rysować - sprawdzam przejęcia !!!")
 
-            # Sprawdź każdego bota
             for bot_name, bot in [("Bot1", self.bot), ("Bot2", self.bot2), ("Bot3", self.bot3)]:
                 if not bot.is_alive:
                     continue
 
-                # Sprawdź ile terenu bota jest teraz w obszarze gracza
                 captured_points = [p for p in bot.area if point_in_polygon(p, self.player.area)]
 
-                if len(captured_points) > len(bot.area) * 0.3:  # Jeśli przejęto >30% terenu bota
-                    print(f"!!! Gracz przejął {len(captured_points)}/{len(bot.area)} punktów od {bot_name} !!!")
-
-                    # Usuń przejęte punkty z bota
+                if len(captured_points) > len(bot.area) * 0.3:
                     bot.area = [p for p in bot.area if not point_in_polygon(p, self.player.area)]
 
                     if len(bot.area) < 3:
                         bot.die(f"Stracił teren na rzecz gracza")
 
-        # 2. Gdy bot 1 wraca do swojego obszaru po rysowaniu
         if (self.bot.is_alive and not self.bot.is_tracing and
                 hasattr(self.bot, 'just_finished_drawing') and self.bot.just_finished_drawing):
 
             self.bot.just_finished_drawing = False
-            print("!!! Bot 1 skończył rysować - sprawdzam przejęcia !!!")
 
-            # Sprawdź gracza
             if self.player.is_alive:
                 captured_points = [p for p in self.player.area if point_in_polygon(p, self.bot.area)]
                 if len(captured_points) > len(self.player.area) * 0.3:
-                    print(f"!!! Bot 1 przejął {len(captured_points)}/{len(self.player.area)} punktów od gracza !!!")
                     self.player.area = [p for p in self.player.area if not point_in_polygon(p, self.bot.area)]
                     if len(self.player.area) < 3:
                         self.player.die("Bot 1 przejął twój teren")
 
-            # Sprawdź innych botów
             for bot_name, other_bot in [("Bot2", self.bot2), ("Bot3", self.bot3)]:
                 if not other_bot.is_alive:
                     continue
                 captured_points = [p for p in other_bot.area if point_in_polygon(p, self.bot.area)]
                 if len(captured_points) > len(other_bot.area) * 0.3:
-                    print(f"!!! Bot 1 przejął {len(captured_points)}/{len(other_bot.area)} punktów od {bot_name} !!!")
                     other_bot.area = [p for p in other_bot.area if not point_in_polygon(p, self.bot.area)]
                     if len(other_bot.area) < 3:
                         other_bot.die(f"Stracił teren na rzecz Bot 1")
 
-        # 3. Gdy bot 2 wraca do swojego obszaru po rysowaniu
         if (self.bot2.is_alive and not self.bot2.is_tracing and
                 hasattr(self.bot2, 'just_finished_drawing') and self.bot2.just_finished_drawing):
 
             self.bot2.just_finished_drawing = False
-            print("!!! Bot 2 skończył rysować - sprawdzam przejęcia !!!")
 
-            # Sprawdź gracza
             if self.player.is_alive:
                 captured_points = [p for p in self.player.area if point_in_polygon(p, self.bot2.area)]
                 if len(captured_points) > len(self.player.area) * 0.3:
-                    print(f"!!! Bot 2 przejął {len(captured_points)}/{len(self.player.area)} punktów od gracza !!!")
                     self.player.area = [p for p in self.player.area if not point_in_polygon(p, self.bot2.area)]
                     if len(self.player.area) < 3:
                         self.player.die("Bot 2 przejął twój teren")
 
-            # Sprawdź innych botów
             for bot_name, other_bot in [("Bot1", self.bot), ("Bot3", self.bot3)]:
                 if not other_bot.is_alive:
                     continue
                 captured_points = [p for p in other_bot.area if point_in_polygon(p, self.bot2.area)]
                 if len(captured_points) > len(other_bot.area) * 0.3:
-                    print(f"!!! Bot 2 przejął {len(captured_points)}/{len(other_bot.area)} punktów od {bot_name} !!!")
                     other_bot.area = [p for p in other_bot.area if not point_in_polygon(p, self.bot2.area)]
                     if len(other_bot.area) < 3:
                         other_bot.die(f"Stracił teren na rzecz Bot 2")
 
-        # 4. Gdy bot 3 wraca do swojego obszaru po rysowaniu
         if (self.bot3.is_alive and not self.bot3.is_tracing and
                 hasattr(self.bot3, 'just_finished_drawing') and self.bot3.just_finished_drawing):
 
             self.bot3.just_finished_drawing = False
-            print("!!! Bot 3 skończył rysować - sprawdzam przejęcia !!!")
 
-            # Sprawdź gracza
             if self.player.is_alive:
                 captured_points = [p for p in self.player.area if point_in_polygon(p, self.bot3.area)]
                 if len(captured_points) > len(self.player.area) * 0.3:
-                    print(f"!!! Bot 3 przejął {len(captured_points)}/{len(self.player.area)} punktów od gracza !!!")
                     self.player.area = [p for p in self.player.area if not point_in_polygon(p, self.bot3.area)]
                     if len(self.player.area) < 3:
                         self.player.die("Bot 3 przejął twój teren")
 
-            # Sprawdź innych botów
             for bot_name, other_bot in [("Bot1", self.bot), ("Bot2", self.bot2)]:
                 if not other_bot.is_alive:
                     continue
                 captured_points = [p for p in other_bot.area if point_in_polygon(p, self.bot3.area)]
                 if len(captured_points) > len(other_bot.area) * 0.3:
-                    print(f"!!! Bot 3 przejął {len(captured_points)}/{len(other_bot.area)} punktów od {bot_name} !!!")
                     other_bot.area = [p for p in other_bot.area if not point_in_polygon(p, self.bot3.area)]
                     if len(other_bot.area) < 3:
                         other_bot.die(f"Stracił teren na rzecz Bot 3")
 
     def update(self):
         if self.player.is_alive and (self.bot.is_alive or self.bot2.is_alive or self.bot3.is_alive):
+            self.powerup_manager.update()
+
+            if self.player.is_alive:
+                powerup_type = self.powerup_manager.check_collisions(self.player)
+                if powerup_type == "speed":
+                    self.player.apply_speed_powerup()
+
+            if self.bot.is_alive:
+                powerup_type = self.powerup_manager.check_collisions(self.bot)
+                if powerup_type == "speed":
+                    self.bot.apply_speed_powerup()
+
+            if self.bot2.is_alive:
+                powerup_type = self.powerup_manager.check_collisions(self.bot2)
+                if powerup_type == "speed":
+                    self.bot2.apply_speed_powerup()
+
+            if self.bot3.is_alive:
+                powerup_type = self.powerup_manager.check_collisions(self.bot3)
+                if powerup_type == "speed":
+                    self.bot3.apply_speed_powerup()
+
             self.player.move(self.speed)
             if self.bot.is_alive:
-                self.bot.move(self.speed)
+                self.bot.move(self.speed, self.powerup_manager.powerups)
             if self.bot2.is_alive:
-                self.bot2.move(self.speed)
+                self.bot2.move(self.speed, self.powerup_manager.powerups)
             if self.bot3.is_alive:
-                self.bot3.move(self.speed)
+                self.bot3.move(self.speed, self.powerup_manager.powerups)
 
-            # NOWE: Aktualizuj timery przejętych punktów
             self.player.update_captured_points_timer()
             self.bot.update_captured_points_timer()
             self.bot2.update_captured_points_timer()
             self.bot3.update_captured_points_timer()
 
-            # 1. Kolizje gracza z botami (gracz zabija bota przez najechanie na ślad)
             if self.bot.is_alive and self.check_trail_collision(self.player, self.bot):
-                print("!!! KOLIZJA: Gracz najechał na ślad bota 1 !!!")
                 self.bot.die("Kolizja ze śladem gracza")
                 hull_result = smart_hull(self.player.area + self.bot.area)
                 if isinstance(hull_result, tuple):
@@ -913,7 +667,6 @@ class GameScene:
                     self.player.area = hull_result
 
             if self.bot2.is_alive and self.check_trail_collision(self.player, self.bot2):
-                print("!!! KOLIZJA: Gracz najechał na ślad bota 2 !!!")
                 self.bot2.die("Kolizja ze śladem gracza")
                 hull_result = smart_hull(self.player.area + self.bot2.area)
                 if isinstance(hull_result, tuple):
@@ -922,7 +675,6 @@ class GameScene:
                     self.player.area = hull_result
 
             if self.bot3.is_alive and self.check_trail_collision(self.player, self.bot3):
-                print("!!! KOLIZJA: Gracz najechał na ślad bota 3 !!!")
                 self.bot3.die("Kolizja ze śladem gracza")
                 hull_result = smart_hull(self.player.area + self.bot3.area)
                 if isinstance(hull_result, tuple):
@@ -930,22 +682,7 @@ class GameScene:
                 else:
                     self.player.area = hull_result
 
-                self.bot.die("Kolizja ze śladem gracza")
-                self.player.area = smart_hull(self.player.area + self.bot.area)
-
-            if self.bot2.is_alive and self.check_trail_collision(self.player, self.bot2):
-                print("!!! KOLIZJA: Gracz najechał na ślad bota 2 !!!")
-                self.bot2.die("Kolizja ze śladem gracza")
-                self.player.area = smart_hull(self.player.area + self.bot2.area)
-
-            if self.bot3.is_alive and self.check_trail_collision(self.player, self.bot3):
-                print("!!! KOLIZJA: Gracz najechał na ślad bota 3 !!!")
-                self.bot3.die("Kolizja ze śladem gracza")
-                self.player.area = smart_hull(self.player.area + self.bot3.area)
-
-            # 2. Kolizje botów ze śladem gracza (bot zabija gracza przez najechanie na ślad)
             if self.player.is_alive and self.bot.is_alive and self.check_trail_collision(self.bot, self.player):
-                print("!!! KOLIZJA: Bot 1 najechał na ślad gracza !!!")
                 self.player.die("Bot 1 przejął twój ślad")
                 hull_result = smart_hull(self.bot.area + self.player.area)
                 if isinstance(hull_result, tuple):
@@ -955,7 +692,6 @@ class GameScene:
                 self.player.area = []
 
             if self.player.is_alive and self.bot2.is_alive and self.check_trail_collision(self.bot2, self.player):
-                print("!!! KOLIZJA: Bot 2 najechał na ślad gracza !!!")
                 self.player.die("Bot 2 przejął twój ślad")
                 hull_result = smart_hull(self.bot2.area + self.player.area)
                 if isinstance(hull_result, tuple):
@@ -965,7 +701,6 @@ class GameScene:
                 self.player.area = []
 
             if self.player.is_alive and self.bot3.is_alive and self.check_trail_collision(self.bot3, self.player):
-                print("!!! KOLIZJA: Bot 3 najechał na ślad gracza !!!")
                 self.player.die("Bot 3 przejął twój ślad")
                 hull_result = smart_hull(self.bot3.area + self.player.area)
                 if isinstance(hull_result, tuple):
@@ -974,12 +709,8 @@ class GameScene:
                     self.bot3.area = hull_result
                 self.player.area = []
 
-            # 3. NOWE: Kolizje bot vs bot (boty zabijają się nawzajem przez najechanie na ślady)
-
-            # Bot 1 vs Bot 2
             if self.bot.is_alive and self.bot2.is_alive:
                 if self.check_trail_collision(self.bot, self.bot2):
-                    print("!!! KOLIZJA: Bot 1 najechał na ślad bota 2 !!!")
                     self.bot2.die("Bot 1 przejął ślad bota 2")
                     hull_result = smart_hull(self.bot.area + self.bot2.area)
                     if isinstance(hull_result, tuple):
@@ -988,7 +719,6 @@ class GameScene:
                         self.bot.area = hull_result
                     self.bot2.area = []
                 elif self.check_trail_collision(self.bot2, self.bot):
-                    print("!!! KOLIZJA: Bot 2 najechał na ślad bota 1 !!!")
                     self.bot.die("Bot 2 przejął ślad bota 1")
                     hull_result = smart_hull(self.bot2.area + self.bot.area)
                     if isinstance(hull_result, tuple):
@@ -997,10 +727,8 @@ class GameScene:
                         self.bot2.area = hull_result
                     self.bot.area = []
 
-            # Bot 1 vs Bot 3
             if self.bot.is_alive and self.bot3.is_alive:
                 if self.check_trail_collision(self.bot, self.bot3):
-                    print("!!! KOLIZJA: Bot 1 najechał na ślad bota 3 !!!")
                     self.bot3.die("Bot 1 przejął ślad bota 3")
                     hull_result = smart_hull(self.bot.area + self.bot3.area)
                     if isinstance(hull_result, tuple):
@@ -1009,7 +737,6 @@ class GameScene:
                         self.bot.area = hull_result
                     self.bot3.area = []
                 elif self.check_trail_collision(self.bot3, self.bot):
-                    print("!!! KOLIZJA: Bot 3 najechał na ślad bota 1 !!!")
                     self.bot.die("Bot 3 przejął ślad bota 1")
                     hull_result = smart_hull(self.bot3.area + self.bot.area)
                     if isinstance(hull_result, tuple):
@@ -1018,10 +745,8 @@ class GameScene:
                         self.bot3.area = hull_result
                     self.bot.area = []
 
-            # Bot 2 vs Bot 3
             if self.bot2.is_alive and self.bot3.is_alive:
                 if self.check_trail_collision(self.bot2, self.bot3):
-                    print("!!! KOLIZJA: Bot 2 najechał na ślad bota 3 !!!")
                     self.bot3.die("Bot 2 przejął ślad bota 3")
                     hull_result = smart_hull(self.bot2.area + self.bot3.area)
                     if isinstance(hull_result, tuple):
@@ -1030,7 +755,6 @@ class GameScene:
                         self.bot2.area = hull_result
                     self.bot3.area = []
                 elif self.check_trail_collision(self.bot3, self.bot2):
-                    print("!!! KOLIZJA: Bot 3 najechał na ślad bota 2 !!!")
                     self.bot2.die("Bot 3 przejął ślad bota 2")
                     hull_result = smart_hull(self.bot3.area + self.bot2.area)
                     if isinstance(hull_result, tuple):
@@ -1039,17 +763,14 @@ class GameScene:
                         self.bot3.area = hull_result
                     self.bot2.area = []
 
-            # 4. Sprawdź przejęcia terenu gdy ktoś kończy rysowanie (gracz i boty)
             self.check_area_expansion()
 
-            # 5. Warunek zwycięstwa
             player_area = self.player.calculate_polygon_area(self.player.area) if self.player.is_alive else 0
             bot_area = self.bot.calculate_polygon_area(self.bot.area) if self.bot.is_alive else 0
             bot2_area = self.bot2.calculate_polygon_area(self.bot2.area) if self.bot2.is_alive else 0
             bot3_area = self.bot3.calculate_polygon_area(self.bot3.area) if self.bot3.is_alive else 0
 
             if player_area > self.map_area * self.win_ratio:
-                # Gracz wygrał
                 for bot in [self.bot, self.bot2, self.bot3]:
                     if bot.is_alive:
                         bot.is_alive = False
@@ -1067,7 +788,6 @@ class GameScene:
             self.game_over_timer += 1
 
     def check_trail_collision(self, attacker, defender):
-        """Sprawdź czy attacker najechał na ślad defendera"""
         if not defender.is_tracing or not defender.trail or not attacker.is_alive:
             return False
         attacker_pos = (attacker.x, attacker.y)
@@ -1083,20 +803,19 @@ class GameScene:
         pygame.draw.rect(self.screen, (0, 0, 0), (50, 50, constants.SCREEN_WIDTH - 100, constants.SCREEN_HEIGHT - 100),
                          3)
 
-        # Rysuj obszar gracza
         if len(self.player.area) > 2:
             color = (200, 220, 255) if self.player.is_alive else (150, 150, 150)
             border = (0, 0, 200) if self.player.is_alive else (100, 100, 100)
             pygame.draw.polygon(self.screen, color, self.player.area)
             pygame.draw.polygon(self.screen, border, self.player.area, 2)
 
-        # Rysuj wszystkie postacie (każdy bot rysuje się sam ze swoim kolorem)
+        self.powerup_manager.draw(self.screen)
+
         self.bot.draw(self.screen)
         self.bot2.draw(self.screen)
         self.bot3.draw(self.screen)
         self.player.draw(self.screen)
 
-        # Rysuj procenty obszarów
         font = pygame.font.SysFont("arial", 22)
         entities = [
             (self.player, (0, 0, 200)),
@@ -1118,13 +837,10 @@ class GameScene:
             self.draw_game_over()
 
     def draw_ui(self):
-        """Rysuj interfejs użytkownika"""
-        # Pokaż powierzchnię obszaru
         area_size = int(self.player.calculate_polygon_area(self.player.area))
         area_text = self.font.render(f"Obszar: {area_size} px²", True, (0, 0, 0))
         self.screen.blit(area_text, (10, 10))
 
-        # Pokaż status
         if self.player.is_tracing:
             status_text = self.font.render("Rysowanie", True, (255, 0, 0))
             self.screen.blit(status_text, (300, 10))
@@ -1132,7 +848,11 @@ class GameScene:
             status_text = self.font.render("W bezpiecznym obszarze", True, (0, 150, 0))
             self.screen.blit(status_text, (300, 10))
 
-        # Pokaż typ otoczki i wygładzanie
+        if self.player.speed_boost_timer > 0:
+            remaining_seconds = self.player.speed_boost_timer // 60 + 1
+            powerup_text = self.font.render(f"PRZYŚPIESZENIE: {remaining_seconds}s", True, (255, 255, 0))
+            self.screen.blit(powerup_text, (10, 70))
+
         if constants.USE_TRIANGULATION:
             hull_type = "Triangulated"
         elif constants.USE_CONCAVE_HULL:
@@ -1144,7 +864,6 @@ class GameScene:
         settings_text = self.font.render(f"Hull: {hull_type} | Areas: {smoothing_type}", True, (100, 100, 100))
         self.screen.blit(settings_text, (10, 40))
 
-        # Instrukcje
         instruction_text = self.font.render("Strzałki: sterowanie | ESC: menu | R: restart (po śmierci)", True,
                                             (100, 100, 100))
         self.screen.blit(instruction_text, (10, constants.SCREEN_HEIGHT - 30))

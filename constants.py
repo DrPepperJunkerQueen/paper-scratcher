@@ -10,13 +10,19 @@ SKIN_IMAGE_PATHS = [
     "resources/skins/skin2.png",
     "resources/skins/skin3.png",
 ]
-SELECTED_SKIN_INDEX = 0  # Indeks wybranego skina
-SKIN_SIZE = 15  # Rozmiar skina na planszy
+SELECTED_SKIN_INDEX = 0
+SKIN_SIZE = 15
 
-# NOWE: Ustawienia otoczki
-USE_CONCAVE_HULL = True  # True = otoczka wklęsła (bardziej realistyczna), False = otoczka wypukła
-CONCAVE_ALPHA = 2.0  # Parametr alpha dla algorytmu alpha shapes (im mniejszy, tym bardziej szczegółowa otoczka)
-AREA_SMOOTHING = True  # True = gładkie obszary z interpolacją punktów, False = obszary bez wygładzania
-USE_TRIANGULATION = False  # True = triangulacja z indywidualną otoczką, False = standardowa otoczka
+USE_CONCAVE_HULL = True
+CONCAVE_ALPHA = 2.0
+AREA_SMOOTHING = True
+USE_TRIANGULATION = False
 
 SETTINGS_BUTTONS_WITDH = 350
+
+POWERUP_SPAWN_INTERVAL = 300
+POWERUP_MAX_COUNT = 3
+SPEED_BOOST_DURATION = 300
+SPEED_BOOST_MULTIPLIER = 2.0
+
+POWERUP_SOUND_PATH = "resources/powerup_2.mp3"
