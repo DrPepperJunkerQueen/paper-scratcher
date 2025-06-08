@@ -18,3 +18,5 @@ USE_CONCAVE_HULL = True  # True = otoczka wklęsła (bardziej realistyczna), Fal
 CONCAVE_ALPHA = 2.0  # Parametr alpha dla algorytmu alpha shapes (im mniejszy, tym bardziej szczegółowa otoczka)
 AREA_SMOOTHING = True  # True = gładkie obszary z interpolacją punktów, False = obszary bez wygładzania
 USE_TRIANGULATION = False  # True = triangulacja z indywidualną otoczką, False = standardowa otoczka
+
+SETTINGS_BUTTONS_WITDH = 350
