@@ -9,7 +9,7 @@ class MainMenu:
         self.next_scene = None
 
         self.buttons = []
-        button_labels = ["Start", "Skins", "Profile", "Settings"]
+        button_labels = ["Start", "Skins", "Settings"]
         button_width = 200
         button_height = 60
         spacing = 20

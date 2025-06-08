@@ -142,7 +142,7 @@ class SettingsScene:
 
         if self.status_timer > 0:
             status_text = self.small_font.render(self.status_message, True, (0, 255, 0))
-            self.screen.blit(status_text, ((constants.SCREEN_WIDTH - status_text.get_width()) / 2, 420))
+            self.screen.blit(status_text, ((constants.SCREEN_WIDTH - status_text.get_width()) / 2, 540))
 
         info_lines = [
             "Convex: Simple hull, may capture undrawn areas (faster)",
