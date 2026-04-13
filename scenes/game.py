@@ -801,7 +801,7 @@ class GameScene:
                 pygame.mixer.stop()
                 try:
                     defeat_sound = pygame.mixer.Sound("resources/defeat.mp3")
-                    defeat_sound.set_volume(0.05)
+                    defeat_sound.set_volume(0.015)
                     defeat_sound.play()
                 except pygame.error:
                     pass
@@ -812,7 +812,7 @@ class GameScene:
                 pygame.mixer.stop()
                 try:
                     defeat_sound = pygame.mixer.Sound("resources/defeat.mp3")
-                    defeat_sound.set_volume(0.5)
+                    defeat_sound.set_volume(0.015)
                     defeat_sound.play()
                 except pygame.error:
                     pass
@@ -823,7 +823,7 @@ class GameScene:
                 pygame.mixer.stop()
                 try:
                     defeat_sound = pygame.mixer.Sound("resources/defeat.mp3")
-                    defeat_sound.set_volume(0.5)
+                    defeat_sound.set_volume(0.015)
                     defeat_sound.play()
                 except pygame.error:
                     pass
