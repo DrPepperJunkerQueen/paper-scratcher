@@ -6,10 +6,10 @@ Paper-Scratcher is an arcade-style territory capture game built with Python and 
 
 This project was developed by:
 
-* [@DrPepperJunkerQueen](https://www.google.com/search?q=https://github.com/DrPepperJunkerQueen) - DrPepperJunkerQueen
-* [@kaemiks](https://www.google.com/search?q=https://github.com/kaemiks) - Kaemiks
-* [@Kokoszka2004](https://www.google.com/search?q=https://github.com/Kokoszka2004) - Kokoszka
-* [@kacper207](https://www.google.com/search?q=https://github.com/kacper207) - kacperr
+* [@DrPepperJunkerQueen](https://github.com/DrPepperJunkerQueen) - DrPepperJunkerQueen
+* [@kaemiks](https://github.com/kaemiks) - Kaemiks
+* [@Kokoszka2004](https://github.com/Kokoszka2004) - Kokoszka
+* [@kacper207](https://github.com/kacper207) - kacperr
 
 ## 🌟 Features
 
